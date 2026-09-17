@@ -25,16 +25,19 @@ def LamportCompatibility.mapPublic
   encodeSelectsLabels := compatible.encodeSelectsLabels
 
 /-- A transmitted-value adapter keeps perfect correctness when evaluation does
-not read the removed part. -/
+not read the removed part. Correctness only ever evaluates a garbled public
+value, so the round trip is required only there: a transmitted type may drop a
+field that some unreachable public value would have filled. -/
 theorem PerfectCorrectness.mapPublic
     {Circuit Input Output Randomness Public Packed EncodingKey Labels Oracle : Type}
     {scheme : GarbledCircuit Circuit Input Output Randomness Public EncodingKey Labels Oracle}
     {oracle : Randomness → Oracle}
     (correct : PerfectCorrectness scheme oracle)
     (pack : Public → Packed) (unpack : Packed → Public)
-    (restores : ∀ answers value input labels,
-      scheme.evaluate answers (unpack (pack value)) input labels =
-        scheme.evaluate answers value input labels) :
+    (restores : ∀ answers parameter circuit randomness input labels,
+      scheme.evaluate answers
+          (unpack (pack (scheme.garble parameter circuit randomness).1)) input labels =
+        scheme.evaluate answers (scheme.garble parameter circuit randomness).1 input labels) :
     PerfectCorrectness (scheme.mapPublic pack unpack) oracle := by
   intro parameter circuit randomness input
   have step := correct parameter circuit randomness input
@@ -95,15 +98,20 @@ namespace Kriterion.ArgoMAC.Lamport
 
 open BN254
 
-/-- The evaluator restores the two removed pad bits, so the packed circuit
-evaluates exactly as the wire circuit does. -/
+/-- The evaluator restores the two removed pad bits and the slots that row
+identity fixes, so the packed circuit evaluates exactly as the wire circuit
+does on every garbled table. -/
 theorem packedCircuit_evaluate [FieldCertificate] [GroupCertificate]
-    (answers : Garbling.EvaluationOracle) (value : Pipeline.Table)
-    (input : AffineInput) (labels : GarbledCircuit.LamportSignature) :
-    wireCircuit.evaluate answers (Pipeline.PackedTable.unpack (Pipeline.Table.pack value))
+    (answers : Garbling.EvaluationOracle) (parameter : Nat) (scalar : NonZeroScalar)
+    (tape : Garbling.Randomness) (input : AffineInput)
+    (labels : GarbledCircuit.LamportSignature) :
+    wireCircuit.evaluate answers
+        (Pipeline.PackedTable.unpack
+          (Pipeline.Table.pack (wireCircuit.garble parameter scalar tape).1))
         input labels =
-      wireCircuit.evaluate answers value input labels := by
-  simp [wireCircuit, GarbledCircuit.mapLabels, Garbling.garbledCircuit, Garbling.evaluate]
+      wireCircuit.evaluate answers (wireCircuit.garble parameter scalar tape).1 input labels := by
+  simp [wireCircuit, GarbledCircuit.mapLabels, Garbling.garbledCircuit, Garbling.evaluate,
+    Garbling.garble, Pipeline.garble]
 
 /-- The wire circuit is perfectly correct. -/
 theorem wirePerfectCorrectness [FieldCertificate] [GroupCertificate] :
@@ -134,6 +142,7 @@ theorem packedPerfectCorrectness [FieldCertificate] [GroupCertificate] :
         (randomness.fixedKeyOracle, randomness.encPRFOracle, randomness.hashOracle)) :=
   Lamport.wirePerfectCorrectness.mapPublic
     Pipeline.Table.pack Pipeline.PackedTable.unpack
-    (fun answers value input labels => Lamport.packedCircuit_evaluate answers value input labels)
+    (fun answers parameter scalar tape input labels =>
+      Lamport.packedCircuit_evaluate answers parameter scalar tape input labels)
 
 end Kriterion.ArgoMAC

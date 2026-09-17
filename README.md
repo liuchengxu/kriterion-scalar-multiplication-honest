@@ -1,7 +1,7 @@
 # A smaller garbled circuit for fixed-scalar BN254 multiplication
 
-**Result: `ciphertextBytes = 8,891,172`, against the 9,699,931-byte baseline — a reduction of
-808,759 bytes (8.3378 %).** The scored quantity is the length of the encoding of the circuit's
+**Result: `ciphertextBytes = 8,887,896`, against the 9,699,931-byte baseline — a reduction of
+812,035 bytes (8.3718 %).** The scored quantity is the length of the encoding of the circuit's
 declared public value, so every byte below is a byte of the published garbled circuit.
 
 This is an **honest** construction: the evaluator never obtains the scalar. It receives 91
@@ -103,16 +103,22 @@ the construction change on the existing proof is **one declaration** (`padGate_e
 Each adaptor packs to `254 × 254 bits = 64,516 bits → 8,065 B` against 8,128 B = **−63 B**, times
 1,097 adaptors = **−69,111 B**.
 
+Each adaptor packs to `254 × 254 bits → 8,065 B` against 8,128 B: 63 B saved and 4 bits wasted,
+because `Encoding` composes byte-aligned components. The masked coefficients are packed per
+row-coordinate rather than individually.
+
 ## 4. What is deliberately left on the table
 
-- **867 B**: 548 B of per-adaptor rounding (4 spare bits each — `Encoding` forces byte-aligned
-  components, so joint packing costs legibility) plus 319 B of unpacked coefficients.
-- **3,003 B** of `Option` tags (11 per row-coordinate × 3 × 91), of which 637 B is paid for absent
-  fields no evaluator ever reads. Row identity is statically known, so a row-shaped public table
-  would reclaim all of it.
+- **548 B** of per-adaptor rounding (4 spare bits × 1,097 adaptors). Joint packing across adaptors
+  would recover it, at the cost of a much less legible encoder.
 
-Both are shape changes to the encoded public value at the cost of legibility, and neither is worth
-the risk at 0.04 % combined.
+**Taken:** the **3,003 B of `Option` tags** (11 per row-coordinate × 3 × 91). Row identity is
+statically known and the present/absent pattern is fixed per row, so the transmitted tables now carry
+only the used slots and no tags at all — 637 B of which was paid for absent fields *no evaluator ever
+reads*. That change went through the same `mapPublic` boundary, so the proof's own table type and
+every privacy statement are untouched.
+
+548 B is 0.006 % of the circuit and is the last priceable item in this design.
 
 ## 5. Honest disclosure
 
@@ -134,7 +140,7 @@ Checked locally with the platform's own `verifier.mjs` — the same five gates i
 {"checks": {"layout":"pass","build":"pass","obligation":"pass",
             "axioms":{"result":"pass","list":["propext","Classical.choice","Quot.sound"]},
             "lint":"pass"},
- "metrics": {"ciphertext_bytes": 8891172},
+ "metrics": {"ciphertext_bytes": 8887896},
  "diagnostic": null}
 ```
 

@@ -7,13 +7,19 @@ import Proof
 -- proved where the encoding is defined.
 attribute [local irreducible] Kriterion.ArgoMAC.Wire.encoding
 
+-- `irreducible` binds the elaborator, not the kernel. Checking this one
+-- definition takes about eleven minutes: the transmitted rows no longer carry
+-- presence tags, and a tag was the only thing that stopped the kernel from
+-- reducing through a row. Lowering the budget below this does not make the
+-- check cheaper, it makes it fail.
+
 namespace Submission
 open Kriterion Kriterion.BN254 Kriterion.ArgoMAC
 
 -- The packed adaptor encoding is 8,065 bytes, so checking one length walks
 -- that many constructors.
-set_option maxRecDepth 100000
-set_option maxHeartbeats 400000
+set_option maxRecDepth 1000000
+set_option maxHeartbeats 4000000
 
 /-- The wire adapter preserves the complete ciphertext and removes repeated input bits. -/
 def solution : Kriterion.Solution := {
@@ -28,7 +34,7 @@ def solution : Kriterion.Solution := {
   EncodingKey := Garbling.EncodingKey
   State := Security.CircuitSimulatorState
   encoding := Wire.encoding
-  ciphertextBytes := 8891172
+  ciphertextBytes := 8887896
   evaluationOracle := fun tape => (tape.fixedKeyOracle, tape.encPRFOracle, tape.hashOracle)
   oracleUniform := by
     convert Security.oracleUniform (Seed.randomness 0) using 1
@@ -54,7 +60,7 @@ def solution : Kriterion.Solution := {
       (Security.concreteCircuitSimulator_rules.mapLabels pack restore).mapPublic
         Pipeline.Table.pack, ?_⟩
     have privacy := ((Security.concreteAdaptivePrivacy (Aux := Unit) (Seed.randomness 0)).mapLabels
-      pack Lamport.restore (fun _ => 8891172) restore (fun _ => rfl)).mapPublic
+      pack Lamport.restore (fun _ => 8887896) restore (fun _ => rfl)).mapPublic
       Pipeline.Table.pack Pipeline.PackedTable.unpack
     have instances : (@Fintype.ofFinite Garbling.Randomness inferInstance) =
         Security.garblingRandomnessFintype := Subsingleton.elim _ _
