@@ -49,15 +49,22 @@ adaptors' slope and hash offsets; with `n > J + 1`, `n − J − 1` combinations
 coefficients are determined by the row secret alone, a checkable predicate over the 7 candidate
 digits. The baseline's X row sits exactly on the boundary (`5 = 4 + 1`) and is optimal.
 
-The Y row had one adaptor of slack: `y10` was a pure spill-canceller. On curve, `y² = x³ + 3`, so
+The Y row had one adaptor of slack: `y10` existed only to cancel a hash spill. Precisely — the
+quadratic coefficient is masked as `(c₅ + r₅)y²`, the `y8` adaptor contributes `(−r₅y + r₈)y`, so their
+sum leaves an unwanted **linear** term `r₈y`; and the Y table publishes no linear-`y` coefficient
+(`c₂ := none`) to absorb it. `y10` contributes `−r₈y + r₁₀`, and the published constant subtracts
+`r₁₀`. On curve, `y² = x³ + 3`, so
 
 ```
 c₀ + c₁x + c₄x² + c₅y²  =  (c₀ + 3c₅) + c₁x + c₄x² + c₅x³
 ```
 
-and the x-only basis `{1, x, x², x³}` is **downward-closed under division by `x`** — so an adaptor
-reading `x` whose spill would land on `x³`, `x²` or `x` always lands on an already-published
-monomial, and no canceller is needed. Three adaptors, with slopes chosen so the chain telescopes:
+and the x-only cubic basis lets **every** spill be absorbed into the existing three-adaptor chain and
+the published constant, so no *extra canceller-only* adaptor is needed. Note that cancellation still
+happens throughout the chain — what disappears is the spill into a monomial slot the row does not
+publish. This closure is a polynomial identity: it does **not** require division by `x`, so `x = 0`
+is not an exception, and the zero digit is covered by the same argument. Three adaptors, with slopes
+chosen so the chain telescopes:
 
 ```
 A_a (over x, ×x²) : σ_a x³ + K_a x²      σ_a := −r₅
