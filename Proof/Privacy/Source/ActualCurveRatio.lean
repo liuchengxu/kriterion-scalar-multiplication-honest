@@ -137,8 +137,11 @@ theorem curveGateProgramRecords_referenceActive
     ((circuitRawGatePrescription keys slopes lifts tables gate).label slot ^^^
       (rawCircuitLocation gate).tweak) =
     (circuitRawGatePrescription keys slopes lifts tables gate).offset slot ^^^
-      (circuitRawGatePrescription keys slopes lifts tables gate).label slot at matched
+      ((circuitRawGatePrescription keys slopes lifts tables gate).label slot ^^^
+        (rawCircuitLocation gate).tweak) at matched
   rw [labelLaw] at matched
+  dsimp only [rawBucketOffset, rawBucketTweak, circuitRawGatePrescription]
+  rw [BitVec.xor_assoc, BitVec.xor_comm (rawCircuitLocation gate).tweak]
   exact matched
 
 

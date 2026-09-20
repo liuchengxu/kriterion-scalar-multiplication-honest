@@ -7,9 +7,9 @@ namespace Kriterion.ArgoMAC
 
 open BN254
 
--- The widest bit blob is two digit adaptors, 16,129 bytes, so the kernel walks
+-- The widest bit blob is one digit adaptor, 8,065 bytes, so the kernel walks
 -- that many constructors when it checks a length.
-set_option maxRecDepth 400000
+set_option maxRecDepth 100000
 
 namespace Wire
 
@@ -33,7 +33,7 @@ private abbrev Digits := Vector BitAdaptor.PackedTable coordinateBitCount
 
 /-- A base field element occupies the `coordinateBitCount` bits its modulus
 allows. Byte alignment would round that up to 256. -/
-private def fieldPack : BitPack BaseField where
+def fieldPack : BitPack BaseField where
   width := coordinateBitCount
   toNat value := value.val
   ofNat value := value
@@ -42,7 +42,7 @@ private def fieldPack : BitPack BaseField where
 
 /-- One transmitted ciphertext row is exactly `coordinateBitCount` bits: the two
 pad bits of a ciphertext carry no message and are not transmitted. -/
-private def rowPack : BitPack BitAdaptor.PackedTable where
+def rowPack : BitPack BitAdaptor.PackedTable where
   width := coordinateBitCount
   toNat table := table.trueRow.toNat
   ofNat value := ⟨BitVec.ofNat coordinateBitCount value⟩
@@ -54,27 +54,27 @@ private def rowPack : BitPack BitAdaptor.PackedTable where
 
 /-- One digit adaptor is `coordinateBitCount` rows of `coordinateBitCount` bits,
 packed with no padding between rows: 64,516 bits. -/
-private def digitPack : BitPack Digits := rowPack.vector coordinateBitCount
+def digitPack : BitPack Digits := rowPack.vector coordinateBitCount
 
 /-- One digit adaptor is 64,516 bits in 8,065 bytes. Grouping two adaptors would
 recover the four spare bits, but 8,065 bytes is already the largest blob whose
 kernel cost this development can carry; see the note on `Submission`. -/
-private def adaptor : Encoding Digits :=
+def adaptor : Encoding Digits :=
   digitPack.encoding 8065 (by decide)
 
 /-- The curve gadget publishes three masked coefficients. -/
-private def curveCoefficients : Encoding (BaseField × BaseField × BaseField) :=
+def curveCoefficients : Encoding (BaseField × BaseField × BaseField) :=
   (fieldPack.pair (fieldPack.pair fieldPack)).encoding 96 (by decide)
 
 /-- The X and Z rows publish five masked coefficients: 1,270 bits in 159 bytes
 rather than five separate 32-byte fields. -/
-private def fiveCoefficients :
+def fiveCoefficients :
     Encoding (BaseField × BaseField × BaseField × BaseField × BaseField) :=
   (fieldPack.pair (fieldPack.pair (fieldPack.pair (fieldPack.pair fieldPack)))).encoding
     159 (by decide)
 
 /-- The Y row publishes four masked coefficients: 1,016 bits in exactly 127 bytes. -/
-private def fourCoefficients : Encoding (BaseField × BaseField × BaseField × BaseField) :=
+def fourCoefficients : Encoding (BaseField × BaseField × BaseField × BaseField) :=
   (fieldPack.pair (fieldPack.pair (fieldPack.pair fieldPack))).encoding 127 (by decide)
 
 private theorem adaptor_length (value : Digits) :
@@ -95,7 +95,9 @@ private theorem fourCoefficients_length
     (fourCoefficients.encode value).length = 127 :=
   BitPack.encoding_length _ 127 _ value
 
-private def curve : Encoding CurveMembership.PackedTable :=
+/-- The transmitted curve-membership table: three packed coefficients and five
+packed digit adaptors. -/
+def curve : Encoding CurveMembership.PackedTable :=
   (curveCoefficients.pair (adaptor.pair (adaptor.pair (adaptor.pair
     (adaptor.pair adaptor))))).map
     (fun value => ((value.c0, value.c1, value.c2),
@@ -104,7 +106,7 @@ private def curve : Encoding CurveMembership.PackedTable :=
     (fun _ => rfl)
 
 /-- The transmitted X row carries its nine filled slots and no presence tags. -/
-private def xRow : Encoding Biquadratic.PackedXTable :=
+def xRow : Encoding Biquadratic.PackedXTable :=
   (fiveCoefficients.pair (adaptor.pair (adaptor.pair (adaptor.pair adaptor)))).map
     (fun value => ((value.c0, value.c1, value.c2, value.c3, value.c5),
       (value.x9, value.y6, value.y8, value.y10)))
@@ -113,7 +115,7 @@ private def xRow : Encoding Biquadratic.PackedXTable :=
     (fun _ => rfl)
 
 /-- The transmitted Y row carries its seven filled slots. -/
-private def yRow : Encoding Biquadratic.PackedYTable :=
+def yRow : Encoding Biquadratic.PackedYTable :=
   (fourCoefficients.pair (adaptor.pair (adaptor.pair adaptor))).map
     (fun value => ((value.c0, value.c1, value.c4, value.c5),
       (value.x7, value.x9, value.y6)))
@@ -121,7 +123,7 @@ private def yRow : Encoding Biquadratic.PackedYTable :=
     (fun _ => rfl)
 
 /-- The transmitted Z row carries its ten filled slots. -/
-private def zRow : Encoding Biquadratic.PackedZTable :=
+def zRow : Encoding Biquadratic.PackedZTable :=
   (fiveCoefficients.pair (adaptor.pair (adaptor.pair (adaptor.pair
     (adaptor.pair adaptor))))).map
     (fun value => ((value.c0, value.c2, value.c3, value.c4, value.c5),
@@ -134,7 +136,8 @@ private def zRow : Encoding Biquadratic.PackedZTable :=
 -- through such a map unrolls the 91-row recursion, once per row, and the kernel
 -- then rechecks the whole row encoding 91 times. The transmitted point-MAC and
 -- pipeline types are plain products so that these two encodings need no map.
-private def pointMAC : Encoding FieldMacToECMac.PackedTable :=
+/-- The transmitted point-MAC table: one fixed-shape row per coordinate. -/
+def pointMAC : Encoding FieldMacToECMac.PackedTable :=
   (xRow.vector FieldMacToECMac.outputMacCount).pair
     ((yRow.vector FieldMacToECMac.outputMacCount).pair
       (zRow.vector FieldMacToECMac.outputMacCount))
@@ -145,7 +148,7 @@ so the kernel leaves it unevaluated.
 That matters because the transmitted value no longer carries presence tags. A
 tag is a `match` on a value the kernel cannot see through, and the baseline
 encoding was full of them; without tags nothing stops the kernel from expanding
-a ciphertext length check into an 8.8-million-element list literal. Every
+a ciphertext length check into an 8.9-million-element list literal. Every
 statement about the encoding rewrites this away with `sealed_eq` first. -/
 private def sealed (fuel : Nat) (bytes : List (Fin 256)) : List (Fin 256) :=
   if fuel = 0 then bytes else sealed (fuel - 1) bytes
@@ -156,7 +159,7 @@ private theorem sealed_eq : ∀ (fuel : Nat) (bytes : List (Fin 256)), sealed fu
   | 0, bytes => by rw [sealed]; simp
   | fuel + 1, bytes => by rw [sealed]; simpa using sealed_eq fuel bytes
 
-private def unsealed : Encoding Pipeline.PackedTable := curve.pair pointMAC
+def unsealed : Encoding Pipeline.PackedTable := curve.pair pointMAC
 
 /-- This encoding includes every transmitted public field. Row identity is
 statically known, so no field carries a presence tag. -/
@@ -167,36 +170,67 @@ def encoding : Encoding Pipeline.PackedTable where
     rw [sealed_eq]
     exact unsealed.decode_encode value tail
 
+/-- The transmitted encoding is the unveiled one: `sealed` only stops the kernel
+from unfolding the 91-row recursion, and it changes no byte. -/
+theorem encoding_bytes (value : Pipeline.PackedTable) :
+    encoding.encode value = unsealed.encode value := sealed_eq 1 (unsealed.encode value)
+
 -- These stay `rw` chains rather than `simp` calls. `simp` matches its rewrite
 -- rules up to reduction, which opens `BitPack.encoding` down to its
 -- `Encoding.natural`, and the kernel then walks one constructor per byte.
-private theorem curve_length (value : CurveMembership.PackedTable) :
+theorem curve_length (value : CurveMembership.PackedTable) :
     (curve.encode value).length = 40421 := by
   rw [curve, map_encode_length, pair_encode_length, pair_encode_length,
     pair_encode_length, pair_encode_length, pair_encode_length,
     curveCoefficients_length, adaptor_length, adaptor_length, adaptor_length,
     adaptor_length, adaptor_length]
 
-private theorem xRow_length (value : Biquadratic.PackedXTable) :
+theorem xRow_length (value : Biquadratic.PackedXTable) :
     (xRow.encode value).length = 32419 := by
   rw [xRow, map_encode_length, pair_encode_length, pair_encode_length,
     pair_encode_length, pair_encode_length, fiveCoefficients_length,
     adaptor_length, adaptor_length, adaptor_length, adaptor_length]
 
-private theorem yRow_length (value : Biquadratic.PackedYTable) :
+theorem yRow_length (value : Biquadratic.PackedYTable) :
     (yRow.encode value).length = 24322 := by
   rw [yRow, map_encode_length, pair_encode_length, pair_encode_length,
     pair_encode_length, fourCoefficients_length, adaptor_length,
     adaptor_length, adaptor_length]
 
-private theorem zRow_length (value : Biquadratic.PackedZTable) :
+theorem zRow_length (value : Biquadratic.PackedZTable) :
     (zRow.encode value).length = 40484 := by
   rw [zRow, map_encode_length, pair_encode_length, pair_encode_length,
     pair_encode_length, pair_encode_length, pair_encode_length,
     fiveCoefficients_length, adaptor_length, adaptor_length, adaptor_length,
     adaptor_length, adaptor_length]
 
-private theorem pointMAC_length (value : FieldMacToECMac.PackedTable) :
+/-- The garbled X row transmits its nine filled slots. -/
+theorem x_length (c0 c1 c2 c3 c5 : BaseField)
+    (randomness : Biquadratic.XRandomness) (oracles : Biquadratic.Oracles) (key : InputMacKey) :
+    (xRow.encode
+      (Biquadratic.Table.packX (Biquadratic.garbleX c0 c1 c2 c3 c5 randomness oracles key))
+      ).length = 32419 :=
+  xRow_length _
+
+/-- The garbled Y row transmits its seven filled slots. -/
+theorem y_length (c0 c1 c4 c5 : BaseField)
+    (randomness : Biquadratic.YRandomness) (oracles : Biquadratic.Oracles) (key : InputMacKey) :
+    (yRow.encode
+      (Biquadratic.Table.packY (Biquadratic.garbleY c0 c1 c4 c5 randomness oracles key))
+      ).length = 24322 :=
+  yRow_length _
+
+/-- The garbled Z row transmits its ten filled slots. -/
+theorem z_length (c0 c2 c3 c4 c5 : BaseField)
+    (randomness : Biquadratic.ZRandomness) (oracles : Biquadratic.Oracles) (key : InputMacKey) :
+    (zRow.encode
+      (Biquadratic.Table.packZ (Biquadratic.garbleZ c0 c2 c3 c4 c5 randomness oracles key))
+      ).length = 40484 :=
+  zRow_length _
+
+/-- Every transmitted row has one of three fixed shapes, so the point-MAC table
+has a length that does not depend on the value. -/
+theorem pointMAC_length (value : FieldMacToECMac.PackedTable) :
     (pointMAC.encode value).length = 8847475 := by
   rw [pointMAC, pair_encode_length, pair_encode_length,
     Encoding.vector_length xRow 32419 _ _ (fun _ => xRow_length _),

@@ -36,26 +36,45 @@ theorem adaptiveErrorEnvelope_has100Bits :
 
 set_option exponentiation.threshold 400
 
-/-- The field modulus gives the six-block pad density bound. -/
-theorem padDensity_le_six [Fintype Block] :
+/-- The exact field modulus gives a pad density below 5.3 inverse blocks. -/
+theorem padDensity_le_fiftyThreeTenths [Fintype Block] :
     (Fintype.card Block : ENNReal) / baseFieldModulus ≤
-      6 / (2 : ENNReal) ^ 128 := by
+      (53 / 10) / (2 : ENNReal) ^ 128 := by
   have card : Fintype.card Block = 2 ^ 128 := by
     exact (Fintype.card_congr BitVec.equivFin.toEquiv).trans (Fintype.card_fin _)
   rw [card]
   apply (ENNReal.toReal_le_toReal (by norm_num [baseFieldModulus, hashLiftQuotientCount]; finiteness) (by finiteness)).mp
   norm_num [ENNReal.toReal_div, baseFieldModulus]
 
-/-- Complete hash fibers give the two-block hash density bound. -/
-theorem hashDensity_le_two [Fintype Block] :
+/-- The original six-block bound follows from the tighter field bound. -/
+theorem padDensity_le_six [Fintype Block] :
+    (Fintype.card Block : ENNReal) / baseFieldModulus ≤
+      6 / (2 : ENNReal) ^ 128 := by
+  apply padDensity_le_fiftyThreeTenths.trans
+  apply ENNReal.div_le_div_right
+  apply (ENNReal.div_le_iff (by norm_num) (by finiteness)).mpr
+  norm_num
+
+/-- The complete hash fibers give a density below 1.001 inverse blocks. -/
+theorem hashDensity_le_thousandOneThousandths [Fintype Block] :
     (Fintype.card Block : ENNReal) ^ 2 /
       (baseFieldModulus * hashLiftQuotientCount : Nat) ≤
-        2 / (2 : ENNReal) ^ 128 := by
+        (1001 / 1000) / (2 : ENNReal) ^ 128 := by
   have card : Fintype.card Block = 2 ^ 128 := by
     exact (Fintype.card_congr BitVec.equivFin.toEquiv).trans (Fintype.card_fin _)
   rw [card]
   apply (ENNReal.toReal_le_toReal (by norm_num [baseFieldModulus, hashLiftQuotientCount]; finiteness) (by finiteness)).mp
   norm_num [ENNReal.toReal_div, baseFieldModulus, hashLiftQuotientCount]
+
+/-- The original two-block bound follows from the tighter hash bound. -/
+theorem hashDensity_le_two [Fintype Block] :
+    (Fintype.card Block : ENNReal) ^ 2 /
+      (baseFieldModulus * hashLiftQuotientCount : Nat) ≤
+        2 / (2 : ENNReal) ^ 128 := by
+  apply hashDensity_le_thousandOneThousandths.trans
+  apply ENNReal.div_le_div_right
+  apply (ENNReal.div_le_iff (by norm_num) (by finiteness)).mpr
+  norm_num
 
 /-- One field-mask loss fits one inverse block count. -/
 theorem fieldMaskLoss_le_block :

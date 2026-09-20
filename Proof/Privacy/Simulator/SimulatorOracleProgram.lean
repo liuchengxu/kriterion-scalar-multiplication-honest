@@ -210,7 +210,8 @@ noncomputable def Program.toOracle {oracle : OracleSpec.{0, 0}} {A : Type} {budg
       inductionHypothesis state
 
 /-- The valid path uses the actual link and at most 835914 programming attempts. -/
-def validProgram [FieldCertificate] [GroupCertificate] (state : CircuitSimulatorState)
+def validProgram {FixedIndex : Type} [FieldCertificate] [GroupCertificate]
+    (state : CircuitSimulatorState FixedIndex)
     (input : AffineInput) (output : Point) (free : Vector Point 90)
     (scales : Fin FieldMacToECMac.outputMacCount → NonZeroBase) :
     Program spec Garbling.Labels 836423 :=
@@ -236,7 +237,7 @@ theorem validProgram_run [FieldCertificate] [GroupCertificate] (state : CircuitS
     linkedPipelineGateSchedule]
 
 /-- The invalid path programs the curve gates without reading the hidden link. -/
-def invalidProgram (state : CircuitSimulatorState) (input : AffineInput) :
+def invalidProgram {FixedIndex : Type} (state : CircuitSimulatorState FixedIndex) (input : AffineInput) :
     Program spec Garbling.Labels 3810 :=
   .map (fun _ => state.labels input)
     (.weaken (commands (scheduleCommands

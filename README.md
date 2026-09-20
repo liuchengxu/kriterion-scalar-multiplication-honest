@@ -1,8 +1,11 @@
 # A smaller garbled circuit for fixed-scalar BN254 multiplication
 
-**Result: `ciphertextBytes = 8,887,896`, against the 9,699,931-byte baseline — a reduction of
-812,035 bytes (8.3718 %).** The scored quantity is the length of the encoding of the circuit's
-declared public value, so every byte below is a byte of the published garbled circuit.
+**Result: `ciphertextBytes = 8,887,896`, against the current revision-15 baseline's 9,806,076
+bytes — a reduction of 918,180 bytes (9.363 %).** Against the pre-revision baseline of 9,699,931 the
+reduction is 812,035 bytes (8.372 %); the baseline grew by 106,145 bytes when the organizers replaced
+a 4-way GLV search with a fixed initial state and paid for it with one extra row. The scored quantity
+is the length of the encoding of the circuit's declared public value, so every byte below is a byte of
+the published garbled circuit.
 
 This is an **honest** construction: the evaluator never obtains the scalar. It receives 91
 offset-blinded points and Horner-sums them into `s·P`; each row is 7-way ambiguous in its digit,
@@ -22,9 +25,10 @@ Each row publishes, per coordinate, a handful of masked coefficients, and each c
 supplied by a **digit adaptor**: 254 ciphertexts, one per input bit, 32 bytes each.
 
 ```
-one adaptor            = 254 × 32 B                       = 8,128 B
-one row (X + Y + Z)     = 12 adaptors + 14 coefficients    ≈ 97 KB
-91 rows + curve gadget                                   = 8,891,172 B
+one adaptor            = 254 × 254 bits, packed          = 8,065 B
+one row (X + Y + Z)     = 12 adaptors + 14 coefficients    = 97,225 B
+curve gadget                                               = 40,421 B
+91 rows + curve gadget                                   = 8,887,896 B
 ```
 
 **99.6 % of the circuit is per-bit ciphertexts.** The input MAC is already computed once and shared
@@ -132,6 +136,25 @@ every privacy statement are untouched.
   not a relocation of payload into the Lamport labels, which the challenge forbids and which this
   construction does not do: the labels remain exactly the 508 selected blocks.
 
+- **The revision-15 obligation is met, and the packing survives it.** Revision 15 replaced the
+  existential simulator — `∃ simulator, …` — with a requirement that the privacy proof supply a
+  finite `Cryptography.BoundedMachine.Machine` for the complete simulator, with the simulator paying
+  machine costs. The packed scheme's obligations are discharged by `Shared.packedCircuit`
+  (`Shared.wireCircuit.mapPublic Table.pack PackedTable.unpack`) together with `packedCompatible`,
+  `packedPerfectCorrectness` and `packedCiphertextSize`, which **carry the baseline's proofs across
+  the packing rather than replacing them**; `adaptivePrivacy` is still
+  `ArithmeticSimulator.compiledAdaptivePrivacy`. The packed boundary is a *type-level* relabelling of
+  the transmitted value, so the bounded machine is the baseline's, unchanged.
+- **One raised kernel budget, disclosed.** `Submission.lean` sets `set_option maxHeartbeats 4000000`
+  for a single check. The expense is an **additive type-level comparison** around `scheme`/`encoding`
+  — `Solution`'s later field types apply `encoding` to what `scheme` returns — measured at
+  **489 s** at that budget against a timeout at the default of 200,000. It is **not** a proof
+  problem: with all nine proof fields replaced by `sorry` the kernel still exceeds 100,000
+  heartbeats, and replacing `scheme` as well drops the check to 2 s. `attribute [local irreducible]
+  Wire.encoding` is already in force here and in `Proof/SharedGarbling.lean`; it binds the
+  *elaborator*, not the kernel, so it does not reach this. No proof depends on the budget, and the
+  previously accepted revision shipped the same line for the same check.
+
 ## 6. Verification
 
 Checked locally with the platform's own `verifier.mjs` — the same five gates it runs:
@@ -143,6 +166,11 @@ Checked locally with the platform's own `verifier.mjs` — the same five gates i
  "metrics": {"ciphertext_bytes": 8887896},
  "diagnostic": null}
 ```
+
+It is repeatable — the same JSON twice, in **18m44.6s** each time, against the platform's 55-minute
+limit (and less than the ~23 min the previously accepted run took there). The build inside the run is
+`lake build Kriterion Construction Proof Submission` under the verifier's own generated lakefile, from
+scratch: 4,497/4,497 jobs including `Proof`.
 
 `#print axioms Submission.solution` → `{propext, Classical.choice, Quot.sound}`. No `sorry`, no
 `axiom`, no `native_decide`, no `implemented_by`, no `extern`. The single `noncomputable` is
@@ -156,8 +184,12 @@ own designs (`B′` and option `A`), one prescribed proof lemma that was provabl
 
 ## 7. Provenance
 
-Derived from the `argomac-lean` baseline (`711689cd`) and the challenge library
-(`bn254-scalar-multiplication/formal`, 14/14 files byte-identical to the reference). The full cost
+Derived from the `argomac-lean` baseline and the revision-15 challenge library. Two levers were
+developed against the pre-revision baseline (`711689cd`) and then **rebased onto the organizers'
+rewritten baseline** (`Kriterion-cc/argomac-lean@6796e286`, whose 9,806,076 bytes are the current
+reference) after revision 15 changed the privacy obligation; the rebase restored the whole machine
+layer and, along the way, corrected 33 statements in that tree that were false under the new
+construction — including two that were provably false rather than stale. The full cost
 model — the mask-dimension law, the spill-routing rule, the eleven closed doors, and the
 addition-law search that fixes the floor at 12 adaptors per row — is documented alongside the
 implementation; the design space is written down there rather than here so that this file stays a

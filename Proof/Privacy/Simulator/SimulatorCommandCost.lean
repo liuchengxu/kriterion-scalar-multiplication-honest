@@ -8,7 +8,8 @@ index and tuple construction, record reads, and two XOR operations.
 The index operations use the schedule's bounded coordinate indices. -/
 def commandWithCost (location : Pipeline.FixedKeyLocation) (window : Nat)
     (label : Block) (slot : Pipeline.FixedKeySlot) (block : Block) : FixedCommand × Nat :=
-  ((fixedKeyIndex location window slot, gateInput location label, block ^^^ label), 20)
+  let input := gateInput location label
+  ((fixedKeyIndex location window slot, input, block ^^^ input), 20)
 
 /-- The compiler constructs the selected commands in execution order.
 The pad branch charges the field encoding, ciphertext XOR, two block extractions,

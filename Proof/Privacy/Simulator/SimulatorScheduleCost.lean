@@ -325,7 +325,7 @@ theorem outputTargetsVectorWithCost_value [FieldCertificate] [GroupCertificate]
 theorem outputTargetsVectorWithCost_bound [FieldCertificate] [GroupCertificate]
     (point : Point) (free : Vector Point 90)
     (scales : Vector NonZeroBase FieldMacToECMac.outputMacCount) :
-    (outputTargetsVectorWithCost point free scales).2 ≤ 139866 := by
+    (outputTargetsVectorWithCost point free scales).2 ≤ 141403 := by
   obtain ⟨ga, gn, fa, fm, fd, elements⟩ := outputTargetsWithCost_bound point free scales
   have scalar := outputTargetsWithCost_scalarOperations point free scales
   simp only [outputTargetsVectorWithCost]
@@ -847,7 +847,7 @@ theorem prepareWithCost_bound [FieldCertificate] [GroupCertificate]
     (state : CircuitSimulatorState) (tables : SimulatorTables state)
     (input : AffineInput) (point : Point) (free : Vector Point 90)
     (scales : Vector NonZeroBase FieldMacToECMac.outputMacCount) :
-    (prepareWithCost state tables input point free scales).2 ≤ 3400000 := by
+    (prepareWithCost state tables input point free scales).2 ≤ 3421659 := by
   have curve := prepareCurveWithCost_bound state.curve input state.bridgeKey tables.curve
   have targets := outputTargetsVectorWithCost_bound point free scales
   have rows := prepareRowsWithCost_bound tables.rows input
@@ -1097,7 +1097,7 @@ def curveArrayPreparedWithCost (arrays : GateArrays 3 5) : PreparedCurve × Nat 
 
 /-- This computation constructs three request records and their direct array views. -/
 def rowArrayPreparedWithCost (arrays : RowArrays) : PreparedRow × Nat :=
-  (arrays.prepared, gateArrayViewWork 5 4 + gateArrayViewWork 4 4 + gateArrayViewWork 5 5 + 12)
+  (arrays.prepared, gateArrayViewWork 5 4 + gateArrayViewWork 4 3 + gateArrayViewWork 5 5 + 12)
 
 /-- This record stores the original state and its materialized request views. -/
 structure OfflinePrepared where
@@ -1130,7 +1130,7 @@ theorem prepareOfflineWithCost_value (arrays : OfflineArrays) (oracle : Simulato
   rfl
 
 theorem prepareOfflineWithCost_count (arrays : OfflineArrays) (oracle : SimulatorState) :
-    (prepareOfflineWithCost arrays oracle).2 = 59760 := by
+    (prepareOfflineWithCost arrays oracle).2 = 56848 := by
   simp only [prepareOfflineWithCost, curveArrayPreparedWithCost, rowArrayPreparedWithCost,
     gateArrayViewWork, Vector.toList_map, List.map_map, Function.comp_def]
   rw [List.map_const', List.sum_replicate_nat]

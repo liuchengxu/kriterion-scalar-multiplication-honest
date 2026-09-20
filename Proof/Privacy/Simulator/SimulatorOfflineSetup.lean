@@ -78,7 +78,7 @@ def readyWithCost (arrays : OfflineArrays) : (PrivateCache × Pipeline.Table) ×
 theorem readyWithCost_value (arrays : OfflineArrays) : (readyWithCost arrays).1 = ready arrays := by
   simp only [readyWithCost, cacheFromCoinWithCost_value, ready]
 
-theorem readyWithCost_count (arrays : OfflineArrays) : (readyWithCost arrays).2 = 83967 := by
+theorem readyWithCost_count (arrays : OfflineArrays) : (readyWithCost arrays).2 = 81055 := by
   simp only [readyWithCost, cacheFromCoinWithCost_value, coinWithCost_count,
     cacheWithCost_count, tableWithCost_count]
 

@@ -183,7 +183,7 @@ private theorem gateSourceRows_actual [FieldCertificate] [GroupCertificate]
     (maskRetainedTape randomness, (0, fun _ => (0, 0, 0))))).1 = _
   rw [Equiv.apply_symm_apply]
 
-private theorem retainedGateSourceRun_actual [FieldCertificate] [GroupCertificate]
+theorem retainedGateSourceRun_actual [FieldCertificate] [GroupCertificate]
     {Aux Observation : Type*} (scalar : ScalarField) (randomness : Garbling.Randomness)
     (choose : Pipeline.Table → SourceOracleRest → PMF (AffineInput × Aux))
     (observe : Pipeline.Table → (AffineInput × Aux) → SelectedGateView →
@@ -293,7 +293,7 @@ def fullGateSourceRun [FieldCertificate] [GroupCertificate] {Aux Observation : T
     retainedGateSourceRun scalar retained (decodeFullSource source) choose observe
   else fallback retained source
 
-private theorem fullGateSourceRun_good_pair [FieldCertificate] [GroupCertificate]
+theorem fullGateSourceRun_good_pair [FieldCertificate] [GroupCertificate]
     {Aux Observation : Type*} (scalar : ScalarField) (retained : MaskRetainedTape)
     (pair : (RawCircuitGate → BaseField × HashLiftQuotient) × CircuitHashRest)
     (choose : Pipeline.Table → SourceOracleRest → PMF (AffineInput × Aux))

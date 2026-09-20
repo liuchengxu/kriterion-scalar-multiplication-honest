@@ -703,6 +703,35 @@ theorem shortInitialCorrect (scalar : BN254.ScalarField) :
   · exact shiftedInitialCorrect scalar 0 1
   · exact shiftedInitialCorrect scalar 1 1
 
+set_option maxRecDepth 4096 in
+/-- The paper needs only the original GLV split and 92 recurrence steps. -/
+theorem glvInitialTerminates92 (scalar : BN254.ScalarField) :
+    after 92 (glvInitial scalar) = ⟨0, 0⟩ := by
+  apply afterSuccEqZeroOfNormLe 91
+  rw [glvInitialEqCandidateZero]
+  obtain ⟨aNonnegative, aUpper, bLower, bUpper⟩ := candidateZeroBounds scalar.val
+  have basisPositive : 0 ≤ (basisD : Int) ∧ (basisD : Int) ≤ (basisC : Int) := by
+    norm_num [basisC, basisD]
+  have aSquare : (candidate scalar.val 0 0).a ^ 2 ≤ (basisC : Int) ^ 2 := by
+    nlinarith [mul_nonneg (show 0 ≤ (basisC : Int) - (candidate scalar.val 0 0).a by omega) (show 0 ≤ (basisC : Int) +
+      (candidate scalar.val 0 0).a by omega)]
+  have bSquare : (candidate scalar.val 0 0).b ^ 2 ≤ (basisC : Int) ^ 2 := by
+    nlinarith [mul_nonneg (show 0 ≤ (basisC : Int) - (candidate scalar.val 0 0).b by omega)
+      (show 0 ≤ (basisC : Int) + (candidate scalar.val 0 0).b by omega)]
+  have mixed : -(candidate scalar.val 0 0).a * (candidate scalar.val 0 0).b ≤
+      (basisC : Int) * (basisD : Int) := by
+    nlinarith [mul_nonneg aNonnegative
+      (show 0 ≤ (candidate scalar.val 0 0).b + (basisD : Int) by omega),
+      mul_nonneg (show 0 ≤ (basisC : Int) - (candidate scalar.val 0 0).a by omega)
+        basisPositive.1]
+  have numeric : 2 * (basisC : Int) ^ 2 + (basisC : Int) * (basisD : Int) ≤
+      (normBound 91 : Nat) := by
+    change _ ≤ ((growBound (normBound 90) : Nat) : Int)
+    rw [boundValue]
+    norm_num [growBound, basisC, basisD]
+  dsimp only [stateNorm, qnorm]
+  nlinarith
+
 instance : TerminationCertificate where
   terminal := shortInitialTerminates91
   initialCorrect := shortInitialCorrect

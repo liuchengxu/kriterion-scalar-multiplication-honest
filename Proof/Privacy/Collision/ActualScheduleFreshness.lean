@@ -143,7 +143,8 @@ private theorem actualCircuitSlotRecord_rawRange
     (recordEqual : (actualCircuitDirective curve points input curveInputMac pointInputMac gate).slotRecord slot =
       (circuitRawGatePrescription keys slopes lifts tables gate).slotRecord slot) :
     ((actualCircuitDirective curve points input curveInputMac pointInputMac gate).slotRecord slot).range =
-      (circuitRawGatePrescription keys slopes lifts tables gate).offset slot ^^^
+      ((circuitRawGatePrescription keys slopes lifts tables gate).offset slot ^^^
+          (rawCircuitLocation gate).tweak) ^^^
         (actualCircuitDirective curve points input curveInputMac pointInputMac gate).label := by
   have domains := congrArg PermutationRecord.domain recordEqual
   change (actualCircuitDirective curve points input curveInputMac pointInputMac gate).label ^^^
@@ -157,8 +158,10 @@ private theorem actualCircuitSlotRecord_rawRange
     simpa only [BitVec.xor_assoc, BitVec.xor_self, BitVec.xor_zero] using cancelled.symm
   have ranges := congrArg PermutationRecord.range recordEqual
   change _ = (circuitRawGatePrescription keys slopes lifts tables gate).offset slot ^^^
-    (circuitRawGatePrescription keys slopes lifts tables gate).label slot at ranges
+    ((circuitRawGatePrescription keys slopes lifts tables gate).label slot ^^^
+      (rawCircuitLocation gate).tweak) at ranges
   rw [labelEqual] at ranges
+  rw [BitVec.xor_assoc, BitVec.xor_comm (rawCircuitLocation gate).tweak]
   exact ranges
 
 /-- Distinct raw offsets give the actual pairwise fresh programming list. -/
@@ -203,8 +206,11 @@ theorem pipelineGateProgramRecords_pairwise
       actualCircuitDirective_label curve points input curveInputMac pointInputMac firstGate firstSlot,
       actualCircuitDirective_label curve points input curveInputMac pointInputMac secondGate secondSlot,
       indices] at sameRange
-    have offsetEqual : (circuitRawGatePrescription keys slopes lifts tables firstGate).offset firstSlot =
-        (circuitRawGatePrescription keys slopes lifts tables secondGate).offset secondSlot := by
+    have offsetEqual :
+        (circuitRawGatePrescription keys slopes lifts tables firstGate).offset firstSlot ^^^
+          (rawCircuitLocation firstGate).tweak =
+        (circuitRawGatePrescription keys slopes lifts tables secondGate).offset secondSlot ^^^
+          (rawCircuitLocation secondGate).tweak := by
       have cancelled := congrArg (fun value => value ^^^ circuitBucketInputLabel curveInputMac pointInputMac
         (rawLabelBucket (fixedKeyIndex (rawCircuitLocation secondGate) (rawCircuitWindow secondGate) secondSlot)))
         sameRange

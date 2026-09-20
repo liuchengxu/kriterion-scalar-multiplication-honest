@@ -47,10 +47,10 @@ theorem curveSourceMask_offsets (oldMask newMask : BaseField) (input : AffineInp
       cases coordinate <;> cases adaptor <;>
         try { exact Fin.elim0 firstRow }
       all_goals
-        change (sourceGatePrescription source pointKey curveKey oldLifts _).offset slot =
-          (sourceGatePrescription source pointKey curveKey oldLifts _).offset slot
-        change (sourceGatePrescription changed newPointKey newCurveKey newLifts _).offset slot =
-          (sourceGatePrescription changed newPointKey newCurveKey newLifts _).offset slot at equal
+        change (sourceGatePrescription source pointKey curveKey oldLifts _).offset slot ^^^ _ =
+          (sourceGatePrescription source pointKey curveKey oldLifts _).offset slot ^^^ _
+        change (sourceGatePrescription changed newPointKey newCurveKey newLifts _).offset slot ^^^ _ =
+          (sourceGatePrescription changed newPointKey newCurveKey newLifts _).offset slot ^^^ _ at equal
         simp only [circuitBucketUse, circuitBucketGate] at equal ⊢
         cases slot <;> exact equal
 

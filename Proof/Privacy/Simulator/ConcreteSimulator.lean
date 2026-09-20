@@ -10,36 +10,36 @@ namespace Kriterion.ArgoMAC.Security
 open BN254 Cryptography
 
 /-- This state keeps the hidden public sample and its programmable oracles. -/
-structure CircuitSimulatorState where
-  oracle : SimulatorState
+structure CircuitSimulatorState (FixedIndex : Type := Pipeline.FixedKeyIndex) where
+  oracle : SimulatorState FixedIndex
   curve : CurveGateRequest
   points : PointGateRequests
   inputKey : InputMacKey
   bridgeKey : BaseField
 
-def CircuitSimulatorState.table (state : CircuitSimulatorState) : Pipeline.Table := {
+def CircuitSimulatorState.table {FixedIndex : Type} (state : CircuitSimulatorState FixedIndex) : Pipeline.Table := {
   curve := state.curve.table
   pointMAC := pointGateTable state.points
 }
 
-def CircuitSimulatorState.labels (state : CircuitSimulatorState)
+def CircuitSimulatorState.labels {FixedIndex : Type} (state : CircuitSimulatorState FixedIndex)
     (input : AffineInput) : Garbling.Labels := {
   input := BitInput.ofAffine input
   inputMac := state.inputKey.encodeAffine input
 }
 
-def CircuitSimulatorState.selectedCurve (state : CircuitSimulatorState)
+def CircuitSimulatorState.selectedCurve {FixedIndex : Type} (state : CircuitSimulatorState FixedIndex)
     (input : AffineInput) : CurveGateRequest :=
   state.curve.retarget input state.bridgeKey
 
-def CircuitSimulatorState.selectedPoints [FieldCertificate] [GroupCertificate]
-    (state : CircuitSimulatorState) (input : AffineInput) (output : Point)
+def CircuitSimulatorState.selectedPoints {FixedIndex : Type} [FieldCertificate] [GroupCertificate]
+    (state : CircuitSimulatorState FixedIndex) (input : AffineInput) (output : Point)
     (free : Vector Point 90) (scales : Fin FieldMacToECMac.outputMacCount → NonZeroBase) :
     PointGateRequests :=
   retargetPointGateRequests state.points input (outputTargets output free scales)
 
-def CircuitSimulatorState.selectedSchedule [FieldCertificate] [GroupCertificate]
-    (state : CircuitSimulatorState) (input : AffineInput) (output : Point)
+def CircuitSimulatorState.selectedSchedule {FixedIndex : Type} [FieldCertificate] [GroupCertificate]
+    (state : CircuitSimulatorState FixedIndex) (input : AffineInput) (output : Point)
     (free : Vector Point 90) (scales : Fin FieldMacToECMac.outputMacCount → NonZeroBase) :
     List GateDirective :=
   linkedPipelineGateSchedule state.oracle (state.selectedCurve input)
@@ -53,8 +53,8 @@ def CircuitSimulatorState.programForOutput [FieldCertificate] [GroupCertificate]
   { state with oracle := programGateSchedule state.oracle (state.selectedSchedule input output free scales) }
 
 /-- The ideal handler updates only the programmable oracle state. -/
-def circuitSimulatorOracleHandler :
-    OracleHandler Garbling.oracleSpec CircuitSimulatorState
+def circuitSimulatorOracleHandler {FixedIndex : Type} :
+    OracleHandler (publicOracleSpec FixedIndex EncPRF.PermutationIndex) (CircuitSimulatorState FixedIndex)
   | query, state =>
       let answered := idealOracleHandler query state.oracle
       (answered.1, { state with oracle := answered.2 })
@@ -81,30 +81,30 @@ noncomputable def circuitSimulator [FieldCertificate] [GroupCertificate]
   }
 
 /-- The challenge checks these tables against the ideal handler's answers. -/
-def CircuitSimulatorState.view (state : CircuitSimulatorState) : Garbling.EvaluationOracle :=
+def CircuitSimulatorState.view {FixedIndex : Type} (state : CircuitSimulatorState FixedIndex) : PublicOracle FixedIndex EncPRF.PermutationIndex :=
   (state.oracle.fixedOracle, state.oracle.encOracle, state.oracle.hashOracle)
 
 /-- The fixed-key transcript marks earlier queries. The other tables never change. -/
-def SimulatorState.seen (state : SimulatorState) : Garbling.OracleQuery → Prop
+def SimulatorState.seen {FixedIndex : Type} (state : SimulatorState FixedIndex) : PublicQuery FixedIndex EncPRF.PermutationIndex → Prop
   | .fixedForward index input => ∃ record ∈ state.fixedTranscript,
       record.index = index ∧ record.domain = input
   | .fixedInverse index output => ∃ record ∈ state.fixedTranscript,
       record.index = index ∧ record.range = output
   | _ => True
 
-theorem SimulatorState.seen_mono {first second : SimulatorState}
-    (records : first.fixedTranscript ⊆ second.fixedTranscript) (query : Garbling.OracleQuery)
+theorem SimulatorState.seen_mono {FixedIndex : Type} {first second : SimulatorState FixedIndex}
+    (records : first.fixedTranscript ⊆ second.fixedTranscript) (query : PublicQuery FixedIndex EncPRF.PermutationIndex)
     (seen : first.seen query) : second.seen query := by
   cases query <;> simp only [SimulatorState.seen] at *
   all_goals first | trivial | obtain ⟨record, member, equal⟩ := seen; exact ⟨record, records member, equal⟩
 
 /-- Matching retained records force both permutation directions to keep their answers. -/
-theorem CircuitSimulatorState.answer_preserved {first second : CircuitSimulatorState}
+theorem CircuitSimulatorState.answer_preserved {FixedIndex : Type} {first second : CircuitSimulatorState FixedIndex}
     (firstValid : SimulatorInvariant first.oracle) (secondValid : SimulatorInvariant second.oracle)
     (records : first.oracle.fixedTranscript ⊆ second.oracle.fixedTranscript)
     (enc : second.oracle.encOracle = first.oracle.encOracle)
     (hash : second.oracle.hashOracle = first.oracle.hashOracle)
-    (query : Garbling.OracleQuery) (seen : first.oracle.seen query) :
+    (query : PublicQuery FixedIndex EncPRF.PermutationIndex) (seen : first.oracle.seen query) :
     publicAnswer second.view query = publicAnswer first.view query := by
   cases query with
   | fixedForward index input =>

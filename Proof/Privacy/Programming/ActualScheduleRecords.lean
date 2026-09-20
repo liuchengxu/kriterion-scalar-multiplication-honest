@@ -382,7 +382,7 @@ theorem pipelineGateProgramRecords_matches_iff
           (actualCircuitDirective curve points input curveInputMac pointInputMac gate).bit →
         oracle.permutation (fixedKeyIndex (gates gate).location (gates gate).window slot)
           (gateInput (gates gate).location ((gates gate).label slot)) =
-          (gates gate).offset slot ^^^ (gates gate).label slot := by
+          (gates gate).offset slot ^^^ gateInput (gates gate).location ((gates gate).label slot) := by
   constructor
   · intro compatible gate slot active
     have member := (mem_pipelineGateProgramRecords_iff curve points input curveInputMac
@@ -440,6 +440,8 @@ theorem pipelineGateProgramRecords_referenceActive
   have matched := (pipelineGateProgramRecords_matches_iff curve points input curveInputMac
     pointInputMac _ recordLaw oracle).mp compatible gate slot selected
   rw [labelLaw] at matched
+  dsimp only [rawBucketOffset, rawBucketTweak, circuitRawGatePrescription]
+  rw [BitVec.xor_assoc, BitVec.xor_comm (rawCircuitLocation gate).tweak]
   exact matched
 
 /-- The source gives the table of every actual selected directive. -/

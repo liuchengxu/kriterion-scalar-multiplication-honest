@@ -53,6 +53,21 @@ noncomputable def Simulator.mapPublic
       (fun result => (pack result.1, result.2)),
     simulator.simulateEncode⟩
 
+/-- This adapter rebases an adversary over the transmitted value onto the
+internal value. A source-side game samples the internal value, so pushing it
+through `pack` before the adversary reads it gives the adversary exactly the
+value the transmitted game would have handed it. -/
+def AdaptiveAdversary.rebase {oracle : OracleSpec} {Input Public Packed Labels : Type}
+    {Aux : Type} (adversary : AdaptiveAdversary oracle Input Packed Labels Aux)
+    (pack : Public → Packed) :
+    AdaptiveAdversary oracle Input Public Labels Aux where
+  State := adversary.State
+  firstQueryBudget := adversary.firstQueryBudget
+  secondQueryBudget := adversary.secondQueryBudget
+  chooseInput parameter value auxiliary := adversary.chooseInput parameter (pack value) auxiliary
+  decide parameter value labels auxiliary state :=
+    adversary.decide parameter (pack value) labels auxiliary state
+
 /-- A transmitted-value adapter preserves every oracle-state obligation. -/
 theorem OracleSimulation.mapPublic
     {FixedIndex EncIndex Input Output Public Packed Labels Topology State : Type}

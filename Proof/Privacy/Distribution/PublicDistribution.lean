@@ -257,18 +257,18 @@ theorem map_uniform_fixedDaviesMeyerBlocks
       (PermutationOracle Pipeline.FixedKeyIndex Block)).map
         (fun (oracle : PermutationOracle Pipeline.FixedKeyIndex Block) slot =>
           oracle.permutation (fixedKeyIndex location window (.hash slot))
-            (gateInput location label) ^^^ label) =
+            (gateInput location label) ^^^ (gateInput location label)) =
       PMF.uniformOfFintype (Fin 3 → Block) := by
   let output : PermutationOracle Pipeline.FixedKeyIndex Block → Fin 3 → Block :=
     fun oracle slot => oracle.permutation
       (fixedKeyIndex location window (.hash slot)) (gateInput location label)
   rw [show (fun (oracle : PermutationOracle Pipeline.FixedKeyIndex Block) slot =>
       oracle.permutation (fixedKeyIndex location window (.hash slot))
-        (gateInput location label) ^^^ label) =
-      xorHashBlockTape label ∘ output from rfl]
+        (gateInput location label) ^^^ (gateInput location label)) =
+      xorHashBlockTape (gateInput location label) ∘ output from rfl]
   rw [← PMF.map_comp]
   rw [map_uniform_fixedHashBlocks]
-  exact map_uniformOfFintype_equivBetween (xorHashBlockTapeEquiv label)
+  exact map_uniformOfFintype_equivBetween (xorHashBlockTapeEquiv (gateInput location label))
 
 /-- This schedule reads the two pad permutations for one fixed gate. -/
 def padTapeSchedule (location : Pipeline.FixedKeyLocation)
@@ -345,18 +345,18 @@ theorem map_uniform_fixedDaviesMeyerPadBlocks
       (PermutationOracle Pipeline.FixedKeyIndex Block)).map
         (fun (oracle : PermutationOracle Pipeline.FixedKeyIndex Block) slot =>
           oracle.permutation (fixedKeyIndex location window (.pad slot))
-            (gateInput location label) ^^^ label) =
+            (gateInput location label) ^^^ (gateInput location label)) =
       PMF.uniformOfFintype (Fin 2 → Block) := by
   let output : PermutationOracle Pipeline.FixedKeyIndex Block → Fin 2 → Block :=
     fun oracle slot => oracle.permutation
       (fixedKeyIndex location window (.pad slot)) (gateInput location label)
   rw [show (fun (oracle : PermutationOracle Pipeline.FixedKeyIndex Block) slot =>
       oracle.permutation (fixedKeyIndex location window (.pad slot))
-        (gateInput location label) ^^^ label) =
-      xorPadBlockTape label ∘ output from rfl]
+        (gateInput location label) ^^^ (gateInput location label)) =
+      xorPadBlockTape (gateInput location label) ∘ output from rfl]
   rw [← PMF.map_comp]
   rw [map_uniform_fixedPadBlocks]
-  exact map_uniformOfFintype_equivBetween (xorPadBlockTapeEquiv label)
+  exact map_uniformOfFintype_equivBetween (xorPadBlockTapeEquiv (gateInput location label))
 
 /-- A distinct-index, distinct-slot schedule reads each entry at its slot. -/
 theorem swapProgramTapeSchedule_snd_reads
@@ -589,7 +589,7 @@ def fixedDaviesMeyerPadLift (location : Pipeline.FixedKeyLocation)
     (window : Nat) (label : Block)
     (oracle : PermutationOracle Pipeline.FixedKeyIndex Block) : FullCiphertext :=
   BitVec.equivFin (BitAdaptor.padBytes
-    (Pipeline.fixedKeyPermutations oracle location window) label)
+    (Pipeline.fixedKeyPermutations oracle location window) (gateInput location label))
 
 theorem fixedDaviesMeyerPadLift_eq
     (location : Pipeline.FixedKeyLocation) (window : Nat) (label : Block)
@@ -597,7 +597,7 @@ theorem fixedDaviesMeyerPadLift_eq
     fixedDaviesMeyerPadLift location window label oracle =
       fullCiphertextBlockEquiv.symm
         (fun slot => oracle.permutation
-          (fixedKeyIndex location window (.pad slot)) (gateInput location label) ^^^ label) := by
+          (fixedKeyIndex location window (.pad slot)) (gateInput location label) ^^^ (gateInput location label)) := by
   rfl
 
 /-- One fixed gate has an exact uniform 256-bit Davies--Meyer pad. -/
@@ -611,7 +611,7 @@ theorem map_uniform_fixedDaviesMeyerPadLift
       fullCiphertextBlockEquiv.symm ∘
         (fun (oracle : PermutationOracle Pipeline.FixedKeyIndex Block) slot =>
           oracle.permutation (fixedKeyIndex location window (.pad slot))
-            (gateInput location label) ^^^ label) by
+            (gateInput location label) ^^^ (gateInput location label)) by
         funext oracle
         exact fixedDaviesMeyerPadLift_eq location window label oracle]
   rw [← PMF.map_comp]
@@ -709,7 +709,7 @@ def separatedEncryptedFieldEquiv
     (location : Pipeline.FixedKeyLocation) (window : Nat)
     (falseLabel trueLabel : Block) (slope : BaseField) :
     (Fin 2 → Block) ≃ FullCiphertext :=
-  ((xorPadBlockTapeEquiv trueLabel).trans fullCiphertextBlockEquiv.symm).trans
+  ((xorPadBlockTapeEquiv (gateInput location trueLabel)).trans fullCiphertextBlockEquiv.symm).trans
     (xorFullCiphertextEquiv (BitAdaptor.fieldBytes
       (slope + (Pipeline.fixedKeyGate oracle location window).hashToField falseLabel)))
 
@@ -1526,7 +1526,7 @@ def fixedDaviesMeyerHashLift (location : Pipeline.FixedKeyLocation)
     (window : Nat) (label : Block)
     (oracle : PermutationOracle Pipeline.FixedKeyIndex Block) : FullHashLift :=
   BitVec.equivFin (BitAdaptor.hashBytes
-    (Pipeline.fixedKeyPermutations oracle location window) label)
+    (Pipeline.fixedKeyPermutations oracle location window) (gateInput location label))
 
 theorem fixedDaviesMeyerHashLift_eq (location : Pipeline.FixedKeyLocation)
     (window : Nat) (label : Block)
@@ -1534,7 +1534,7 @@ theorem fixedDaviesMeyerHashLift_eq (location : Pipeline.FixedKeyLocation)
     fixedDaviesMeyerHashLift location window label oracle =
       fullHashLiftBlockEquiv.symm
         (fun slot => oracle.permutation
-          (fixedKeyIndex location window (.hash slot)) (gateInput location label) ^^^ label) := by
+          (fixedKeyIndex location window (.hash slot)) (gateInput location label) ^^^ (gateInput location label)) := by
   rfl
 
 /-- One fixed gate has an exact uniform 384-bit Davies--Meyer hash lift. -/
@@ -1548,7 +1548,7 @@ theorem map_uniform_fixedDaviesMeyerHashLift
       fullHashLiftBlockEquiv.symm ∘
         (fun (oracle : PermutationOracle Pipeline.FixedKeyIndex Block) slot =>
           oracle.permutation (fixedKeyIndex location window (.hash slot))
-            (gateInput location label) ^^^ label) by
+            (gateInput location label) ^^^ (gateInput location label)) by
         funext oracle
         exact fixedDaviesMeyerHashLift_eq location window label oracle]
   rw [← PMF.map_comp]
@@ -1604,7 +1604,7 @@ theorem fixedHashToField_eq_goodResidue
         congrArg Fin.val fullEqual
       _ = good.val := by rfl
   change ((BitAdaptor.hashBytes
-    (Pipeline.fixedKeyPermutations oracle location window) label).toNat : BaseField) =
+    (Pipeline.fixedKeyPermutations oracle location window) (gateInput location label)).toNat : BaseField) =
       (good.val : BaseField)
   simpa [fixedDaviesMeyerHashLift, BitVec.equivFin] using
     congrArg (fun value : Nat => (value : BaseField)) valueEqual

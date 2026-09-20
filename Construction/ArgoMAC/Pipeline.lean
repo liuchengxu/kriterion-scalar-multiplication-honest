@@ -79,10 +79,10 @@ def FixedKeyLocation.kind : FixedKeyLocation → FixedKeyKind
   | .curve adaptor => .curve adaptor
   | .point _ coordinate adaptor => .point coordinate adaptor
 
-/-- The digit tweak is injective on the 91 outputs. A curve gate uses no tweak. -/
+/-- The paper assigns tweaks 0 through 90 to digits and tweak 91 to curve gates. -/
 def FixedKeyLocation.tweak : FixedKeyLocation → Block
-  | .curve _ => 0
-  | .point output _ _ => BitVec.ofNat 128 (output.val + 1)
+  | .curve _ => BitVec.ofNat 128 FieldMacToECMac.outputMacCount
+  | .point output _ _ => BitVec.ofNat 128 output.val
 
 /-- The tweak map is an involution on blocks. -/
 def tweakEquiv (tweak : Block) : Equiv Block Block where
@@ -95,26 +95,30 @@ def tweakEquiv (tweak : Block) : Equiv Block Block where
     show block ^^^ tweak ^^^ tweak = block
     rw [BitVec.xor_assoc, BitVec.xor_self, BitVec.xor_zero]
 
-/-- The gate permutation reads the bucket permutation at the tweaked label. -/
+/-- Each gate reads the raw bucket permutations. The gate applies the input tweak. -/
 def fixedKeyPermutations
     (oracle : PermutationOracle FixedKeyIndex Block)
     (location : FixedKeyLocation) (position : Nat) : BitAdaptor.FixedKeyPermutations := {
-  hash := fun slot => (tweakEquiv location.tweak).trans (oracle.permutation {
+  hash := fun slot => oracle.permutation {
     kind := location.kind
     position := ⟨position % coordinateBitCount, Nat.mod_lt _ (by decide)⟩
     slot := .hash slot
-  })
-  pad := fun slot => (tweakEquiv location.tweak).trans (oracle.permutation {
+  }
+  pad := fun slot => oracle.permutation {
     kind := location.kind
     position := ⟨position % coordinateBitCount, Nat.mod_lt _ (by decide)⟩
     slot := .pad slot
-  })
+  }
 }
 
 /-- This oracle serves the gate of one location at one coordinate bit position. -/
 def fixedKeyGate (oracle : PermutationOracle FixedKeyIndex Block)
     (location : FixedKeyLocation) (position : Nat) : BitAdaptor.FixedKeyOracle :=
-  BitAdaptor.fixedKeyOracle (fixedKeyPermutations oracle location position)
+  let gate := BitAdaptor.fixedKeyOracle (fixedKeyPermutations oracle location position)
+  { hashToField label := gate.hashToField (label ^^^ location.tweak)
+    encrypt label message := gate.encrypt (label ^^^ location.tweak) message
+    decrypt label ciphertext := gate.decrypt (label ^^^ location.tweak) ciphertext
+    decryptEncrypt label message := gate.decryptEncrypt (label ^^^ location.tweak) message }
 
 def curveOracles (oracle : PermutationOracle FixedKeyIndex Block) :
     CurveMembership.Oracles := {

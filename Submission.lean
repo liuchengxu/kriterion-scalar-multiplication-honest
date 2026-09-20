@@ -2,74 +2,61 @@ import Solution
 import Construction
 import Proof
 
--- The packed encoding is a 8,065-byte-per-adaptor structure. Unfolding it
--- during elaboration is expensive and never needed: the length theorems are
--- proved where the encoding is defined.
+-- The transmitted encoding is a 91-row structure whose `encode` walks the whole
+-- table. Unfolding it during elaboration is never needed: its length is proved
+-- where it is defined. `irreducible` binds the elaborator only; the kernel still
+-- checks every term this file produces.
 attribute [local irreducible] Kriterion.ArgoMAC.Wire.encoding
 
--- `irreducible` binds the elaborator, not the kernel. Checking this one
--- definition takes about eleven minutes: the transmitted rows no longer carry
--- presence tags, and a tag was the only thing that stopped the kernel from
--- reducing through a row. Lowering the budget below this does not make the
--- check cheaper, it makes it fail.
+set_option maxRecDepth 4096
+
+-- The kernel re-checks the whole bundle, and the expensive step in it is a
+-- type-level comparison around `scheme`/`encoding`: the later fields of
+-- `Solution` apply `encoding` to the value `scheme` returns, so the kernel must
+-- see through `packedCircuit` to compare the two forms, once per mention. That
+-- cost is additive across the fields and is nobody's `rfl`: stubbing all nine
+-- proof fields in a scratch copy still needs more than 100,000 heartbeats, while
+-- stubbing `scheme` as well drops the check to 2 s. `irreducible` above is
+-- already in force and does not help, because it binds the elaborator and not
+-- the kernel. Measured: `type checking took 489s` at 4,000,000 heartbeats; the
+-- 200,000 default stops it after about 34 s. This file is built from scratch by
+-- the platform, so the budget has to live here.
+set_option maxHeartbeats 4000000
 
 namespace Submission
 open Kriterion Kriterion.BN254 Kriterion.ArgoMAC
 
--- The packed adaptor encoding is 8,065 bytes, so checking one length walks
--- that many constructors.
-set_option maxRecDepth 1000000
-set_option maxHeartbeats 4000000
-
-/-- The wire adapter preserves the complete ciphertext and removes repeated input bits. -/
+/-- The submission uses 91 digits and three shared permutation slots. -/
 def solution : Kriterion.Solution := {
-  FixedIndex := Pipeline.FixedKeyIndex
+  FixedIndex := Shared.FixedKeyIndex
   EncIndex := EncPRF.PermutationIndex
   fixedFinite := inferInstance
   encFinite := inferInstance
-  Randomness := Garbling.Randomness
+  Randomness := Shared.Randomness
   randomnessFinite := inferInstance
-  randomness := Seed.randomness 0
+  randomness := Shared.Randomness.ofLegacy (Seed.randomness 0)
   Public := Pipeline.PackedTable
   EncodingKey := Garbling.EncodingKey
-  State := Security.CircuitSimulatorState
+  State := Shared.Simulator.State
   encoding := Wire.encoding
   ciphertextBytes := 8887896
-  evaluationOracle := fun tape => (tape.fixedKeyOracle, tape.encPRFOracle, tape.hashOracle)
+  evaluationOracle := Shared.evaluationOracle
   oracleUniform := by
-    convert Security.oracleUniform (Seed.randomness 0) using 1
-  scheme := fun field group => @Lamport.packedCircuit field group
-  ciphertextSize := by
-    intro field group parameter scalar tape
-    letI := field
-    letI := group
-    exact Wire.ciphertextSize parameter scalar tape
-  lamportCompatible := fun field group => @Lamport.packedCompatible field group
+    convert Shared.oracleUniform (Shared.Randomness.ofLegacy (Seed.randomness 0)) using 1
+  scheme := fun f g => @Shared.packedCircuit f g
+  ciphertextSize := fun field group => @Shared.packedCiphertextSize field group
+  lamportCompatible := fun field group => @Shared.packedCompatible field group
   idealOracle := Security.circuitSimulatorOracleHandler
   idealView := Security.CircuitSimulatorState.view
   functionCorrect := fun _ _ _ _ => rfl
-  perfectCorrectness := fun field group => @packedPerfectCorrectness field group
+  perfectCorrectness := fun field group => @Shared.packedPerfectCorrectness field group
   adaptivePrivacy := by
     intro field group
     letI := field
     letI := group
-    let pack := fun labels : Garbling.Labels => Lamport.selectedLabels labels.inputMac
-    let restore := fun _ : Nat => (⟨508, 91⟩ : Garbling.Topology)
-    refine ⟨(Security.concreteCircuitSimulator.mapLabels pack restore).mapPublic
-        Pipeline.Table.pack,
-      (Security.concreteCircuitSimulator_rules.mapLabels pack restore).mapPublic
-        Pipeline.Table.pack, ?_⟩
-    have privacy := ((Security.concreteAdaptivePrivacy (Aux := Unit) (Seed.randomness 0)).mapLabels
-      pack Lamport.restore (fun _ => 8887896) restore (fun _ => rfl)).mapPublic
-      Pipeline.Table.pack Pipeline.PackedTable.unpack
-    have instances : (@Fintype.ofFinite Garbling.Randomness inferInstance) =
-        Security.garblingRandomnessFintype := Subsingleton.elim _ _
-    have tapes : @uniformRandomTape Garbling.Randomness (@Fintype.ofFinite _ inferInstance)
-        (Seed.randomness 0) = Security.randomTape (Seed.randomness 0) := by
-      unfold uniformRandomTape Security.randomTape
-      rw [Cryptography.uniformTape_eq, instances]
-    rw [tapes]
-    exact privacy
+    convert ArithmeticSimulator.compiledAdaptivePrivacy (Aux := Unit)
+      (Shared.Randomness.ofLegacy (Seed.randomness 0)) using 1
+    rfl
 }
 
 end Submission

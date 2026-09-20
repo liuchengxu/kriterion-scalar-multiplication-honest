@@ -41,7 +41,7 @@ private theorem uniformPair {A B : Type*} [Fintype A] [Fintype B]
   rw [ENNReal.mul_inv (Or.inr (ENNReal.natCast_ne_top _)) (Or.inl (ENNReal.natCast_ne_top _))]
   simp only [← ENNReal.tsum_mul_left, mul_assoc]
 
-private theorem uniformTransport {A B C D E : Type*}
+theorem fullSourceUniformTransport {A B C D E : Type*}
     [Fintype A] [Fintype B] [Fintype C] [Fintype D] [Fintype E]
     [Nonempty A] [Nonempty B] [Nonempty C] [Nonempty D] [Nonempty E]
     (equivalence : (A × B) ≃ C × D × E)
@@ -84,7 +84,7 @@ theorem fullSourceRest_weighted_eq [FieldCertificate] [GroupCertificate]
         ∑' sample, (PMF.uniformOfFintype ((PermutationOracle Pipeline.FixedKeyIndex Block) × InputMacKey)) sample *
           weight (garblingOracleKeyEquiv.symm (sample, rest)) tag := by
   letI : Nonempty GarblingSourceRest := ⟨(garblingOracleKeyEquiv witness).2⟩
-  apply uniformTransport fullSourceRestEquiv
+  apply fullSourceUniformTransport fullSourceRestEquiv
     (fun retained full => weight (fullSourceTape retained full).1 (fullSourceTape retained full).2)
     (fun rest tag sample => weight (garblingOracleKeyEquiv.symm (sample, rest)) tag)
   intro retained full

@@ -96,7 +96,7 @@ def actualGateLabelUse (oracle : SimulatorOracleCoin) (bridgeKey : BaseField)
     (gate : RawCircuitGate) (bit : Bool) (outputBlock : Block) : PrequeryLabelUse :=
   ⟨circuitGateWire gate, bit,
     circuitGateLabelPad oracle bridgeKey gate bit ^^^ (rawCircuitLocation gate).tweak,
-    circuitGateLabelPad oracle bridgeKey gate bit ^^^ outputBlock⟩
+    circuitGateLabelPad oracle bridgeKey gate bit ^^^ (rawCircuitLocation gate).tweak ^^^ outputBlock⟩
 
 /-- The use gives the exact actual gate domain. -/
 theorem actualGateLabelUse_domain (oracle : SimulatorOracleCoin) (bridgeKey : BaseField)
@@ -114,8 +114,9 @@ theorem actualGateLabelUse_range (oracle : SimulatorOracleCoin) (bridgeKey : Bas
     (key : InputMacKey) (gate : RawCircuitGate) (bit : Bool) (outputBlock : Block) :
     let use := actualGateLabelUse oracle bridgeKey gate bit outputBlock
     inputKeyLabel key use.index use.bit ^^^ use.rangeShift =
-      outputBlock ^^^ BitAdaptor.encode (circuitGateKey (EncPRF.transformKey oracle.encOracle
-        (EncPRF.whiteningKeys oracle.hashOracle bridgeKey) key) key gate) bit := by
+      outputBlock ^^^ (BitAdaptor.encode (circuitGateKey (EncPRF.transformKey oracle.encOracle
+        (EncPRF.whiteningKeys oracle.hashOracle bridgeKey) key) key gate) bit ^^^
+          (rawCircuitLocation gate).tweak) := by
   dsimp only [actualGateLabelUse]
   rw [circuitGateLabel_sourceShift]
   ac_rfl

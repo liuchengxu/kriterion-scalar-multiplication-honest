@@ -1462,6 +1462,38 @@ theorem PointRowPair.distinct (pair : PointRowPair) : pair.lower ≠ pair.1 := b
   have values := congrArg Fin.val equal
   exact (Nat.ne_of_lt pair.2.isLt) values
 
+/-- The paper feed-forward adds the digit tweak to each range offset. -/
+def pointBranchOffset (row : Fin FieldMacToECMac.outputMacCount)
+    (visible : VisibleRowSample) (hidden : HiddenRowSample)
+    (rows : Coordinates.Rows) (input : AffineInput) (target : FieldMacToECMac.HomogeneousValue)
+    (family : PointGateFamily) (position : Fin coordinateBitCount)
+    (slot : Pipeline.FixedKeySlot) : Block :=
+  pointBranchBlock visible hidden rows input target family position slot ^^^
+    (Pipeline.FixedKeyLocation.point row .x .y6).tweak
+
+/-- A fixed XOR shift preserves the block density bound. -/
+theorem pointBranchOffset_mass_le [Fintype Block] (row : Fin FieldMacToECMac.outputMacCount)
+    (visible : VisibleRowSample) (rows : Coordinates.Rows) (input : AffineInput)
+    (target : FieldMacToECMac.HomogeneousValue) (family : PointGateFamily)
+    (position : Fin coordinateBitCount) (slot : Pipeline.FixedKeySlot) (block : Block) :
+    (PMF.uniformOfFintype HiddenRowSample).toOuterMeasure
+      {hidden | pointBranchOffset row visible hidden rows input target family position slot = block} ≤
+        activeSlotDensity slot := by
+  have bound := pointBranchBlock_mass_le visible rows input target family position slot
+    (block ^^^ (Pipeline.FixedKeyLocation.point row .x .y6).tweak)
+  have equal : {hidden | pointBranchOffset row visible hidden rows input target family position slot = block} =
+      {hidden | pointBranchBlock visible hidden rows input target family position slot =
+        block ^^^ (Pipeline.FixedKeyLocation.point row .x .y6).tweak} := by
+    ext hidden
+    change (pointBranchBlock visible hidden rows input target family position slot ^^^
+        (Pipeline.FixedKeyLocation.point row .x .y6).tweak = block) ↔ _ = _
+    constructor <;> intro same
+    · have shifted := congrArg (fun value => value ^^^ (Pipeline.FixedKeyLocation.point row .x .y6).tweak) same
+      simpa only [BitVec.xor_assoc, BitVec.xor_self, BitVec.xor_zero] using shifted
+    · rw [same, BitVec.xor_assoc, BitVec.xor_self, BitVec.xor_zero]
+  rw [equal]
+  exact bound
+
 /-- This event tests point output collisions in every fixed slot. -/
 def pointBranchCollision (visible : Fin FieldMacToECMac.outputMacCount → VisibleRowSample)
     (rows : Fin FieldMacToECMac.outputMacCount → Coordinates.Rows)
@@ -1470,9 +1502,9 @@ def pointBranchCollision (visible : Fin FieldMacToECMac.outputMacCount → Visib
     (hidden : Fin FieldMacToECMac.outputMacCount → HiddenRowSample) : Prop :=
   ∃ (family : PointGateFamily) (position : Fin coordinateBitCount)
       (slot : Pipeline.FixedKeySlot) (pair : PointRowPair),
-    pointBranchBlock (visible pair.lower) (hidden pair.lower) (rows pair.lower) input (targets pair.lower)
+    pointBranchOffset pair.lower (visible pair.lower) (hidden pair.lower) (rows pair.lower) input (targets pair.lower)
       family position slot =
-    pointBranchBlock (visible pair.1) (hidden pair.1) (rows pair.1) input (targets pair.1)
+    pointBranchOffset pair.1 (visible pair.1) (hidden pair.1) (rows pair.1) input (targets pair.1)
       family position slot
 
 /-- A good point tape gives distinct offsets in every reconstructed slot. -/
@@ -1483,7 +1515,7 @@ theorem pointBranchCollision_false_injective
     (hidden : Fin FieldMacToECMac.outputMacCount → HiddenRowSample)
     (good : ¬ pointBranchCollision visible rows input targets hidden)
     (family : PointGateFamily) (position : Fin coordinateBitCount) (slot : Pipeline.FixedKeySlot) :
-    Function.Injective (fun row => pointBranchBlock (visible row) (hidden row) (rows row)
+    Function.Injective (fun row => pointBranchOffset row (visible row) (hidden row) (rows row)
       input (targets row) family position slot) := by
   intro first second equal
   by_contra distinct
@@ -1511,12 +1543,15 @@ theorem pointBranchCollision_false_selected_injective
       | .hash _ => family.selectedBit input position = false
       | .pad _ => family.selectedBit input position = true) :
     Function.Injective (fun row => selectedPointBlock (visible row) (hidden row)
-      input (targets row) family position slot) := by
-  have equal : (fun row => pointBranchBlock (visible row) (hidden row) (rows row)
+      input (targets row) family position slot ^^^
+      (Pipeline.FixedKeyLocation.point row .x .y6).tweak) := by
+  have equal : (fun row => pointBranchOffset row (visible row) (hidden row) (rows row)
       input (targets row) family position slot) =
-      (fun row => selectedPointBlock (visible row) (hidden row) input (targets row) family position slot) := by
+      (fun row => selectedPointBlock (visible row) (hidden row) input (targets row) family position slot ^^^
+        (Pipeline.FixedKeyLocation.point row .x .y6).tweak) := by
     funext row
-    exact pointBranchBlock_eq_selectedPointBlock _ _ _ _ _ _ _ _ active
+    exact congrArg (fun block => block ^^^ (Pipeline.FixedKeyLocation.point row .x .y6).tweak)
+      (pointBranchBlock_eq_selectedPointBlock _ _ _ _ _ _ _ _ active)
   rw [← equal]
   exact pointBranchCollision_false_injective visible rows input targets hidden good family position slot
 
@@ -1528,23 +1563,23 @@ theorem pointBranchBlock_pair_mass_le [Fintype Block]
       FieldMacToECMac.HomogeneousValue) (family : PointGateFamily)
     (position : Fin coordinateBitCount) (slot : Pipeline.FixedKeySlot) (pair : PointRowPair) :
     (PMF.uniformOfFintype (Fin FieldMacToECMac.outputMacCount → HiddenRowSample)).toOuterMeasure
-      {hidden | pointBranchBlock (visible pair.lower) (hidden pair.lower) (rows pair.lower) input
+      {hidden | pointBranchOffset pair.lower (visible pair.lower) (hidden pair.lower) (rows pair.lower) input
           (targets pair.lower) family position slot =
-        pointBranchBlock (visible pair.1) (hidden pair.1) (rows pair.1) input
+        pointBranchOffset pair.1 (visible pair.1) (hidden pair.1) (rows pair.1) input
           (targets pair.1) family position slot} ≤ activeSlotDensity slot :=
 by
-  have pointwise := fun block => @pointBranchBlock_mass_le ‹Fintype Block›
+  have pointwise := fun block => @pointBranchOffset_mass_le ‹Fintype Block› pair.lower
     (visible pair.lower) (rows pair.lower) input (targets pair.lower) family position slot block
   exact uniform_pair_event_le
     (Index := Fin FieldMacToECMac.outputMacCount) (Source := HiddenRowSample) (Value := Block)
     pair.lower pair.1 pair.distinct
-    (fun sample => pointBranchBlock (visible pair.lower) sample (rows pair.lower) input
+    (fun sample => pointBranchOffset pair.lower (visible pair.lower) sample (rows pair.lower) input
       (targets pair.lower) family position slot)
-    (fun sample => pointBranchBlock (visible pair.1) sample (rows pair.1) input
+    (fun sample => pointBranchOffset pair.1 (visible pair.1) sample (rows pair.1) input
       (targets pair.1) family position slot)
-    {hidden | pointBranchBlock (visible pair.lower) (hidden pair.lower) (rows pair.lower) input
+    {hidden | pointBranchOffset pair.lower (visible pair.lower) (hidden pair.lower) (rows pair.lower) input
         (targets pair.lower) family position slot =
-      pointBranchBlock (visible pair.1) (hidden pair.1) (rows pair.1) input
+      pointBranchOffset pair.1 (visible pair.1) (hidden pair.1) (rows pair.1) input
         (targets pair.1) family position slot}
     (activeSlotDensity slot) rfl (by
       intro value
@@ -1567,9 +1602,9 @@ theorem pointBranchCollision_mass_le [Fintype Block]
   exact finite_four_union_le
     (PMF.uniformOfFintype (Fin FieldMacToECMac.outputMacCount → HiddenRowSample))
     (fun family position slot (pair : PointRowPair) =>
-      {hidden | pointBranchBlock (visible pair.lower) (hidden pair.lower) (rows pair.lower) input
+      {hidden | pointBranchOffset pair.lower (visible pair.lower) (hidden pair.lower) (rows pair.lower) input
           (targets pair.lower) family position slot =
-        pointBranchBlock (visible pair.1) (hidden pair.1) (rows pair.1) input
+        pointBranchOffset pair.1 (visible pair.1) (hidden pair.1) (rows pair.1) input
           (targets pair.1) family position slot})
     {hidden | pointBranchCollision visible rows input targets hidden} activeSlotDensity
     (by ext hidden; simp only [pointBranchCollision, Set.mem_setOf_eq, Set.mem_iUnion])
@@ -1586,9 +1621,9 @@ theorem pointRowPair_card : Fintype.card PointRowPair = 4095 := by
   rw [Fin.sum_univ_eq_sum_range (fun i : Nat => i), Finset.sum_range_id]
   rfl
 
-/-- The five slots have total density at most eighteen inverse blocks. -/
-theorem activeSlotDensity_sum_le [Fintype Block] :
-    ∑ slot, activeSlotDensity slot ≤ 18 / (2 : ENNReal) ^ 128 := by
+/-- The five roles have total density at most 13.603 inverse blocks. -/
+theorem activeSlotDensity_sum_le_tight [Fintype Block] :
+    ∑ slot, activeSlotDensity slot ≤ (13603 / 1000) / (2 : ENNReal) ^ 128 := by
   let equiv : Pipeline.FixedKeySlot ≃ Fin 3 ⊕ Fin 2 := {
     toFun := fun slot => match slot with | .hash i => .inl i | .pad i => .inr i
     invFun := fun slot => match slot with | .inl i => .hash i | .inr i => .pad i
@@ -1596,16 +1631,43 @@ theorem activeSlotDensity_sum_le [Fintype Block] :
     right_inv := by intro slot; cases slot <;> rfl }
   rw [← equiv.symm.sum_comp, Fintype.sum_sum_type]
   calc
-    _ ≤ (∑ _i : Fin 3, 2 / (2 : ENNReal) ^ 128) +
-        ∑ _i : Fin 2, 6 / (2 : ENNReal) ^ 128 := by
+    _ ≤ (∑ _i : Fin 3, (1001 / 1000) / (2 : ENNReal) ^ 128) +
+        ∑ _i : Fin 2, (53 / 10) / (2 : ENNReal) ^ 128 := by
       apply add_le_add
-      · exact Finset.sum_le_sum fun _ _ => hashDensity_le_two
-      · exact Finset.sum_le_sum fun _ _ => padDensity_le_six
+      · exact Finset.sum_le_sum fun _ _ => hashDensity_le_thousandOneThousandths
+      · exact Finset.sum_le_sum fun _ _ => padDensity_le_fiftyThreeTenths
     _ = _ := by
       simp only [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
-      simp only [div_eq_mul_inv]
-      norm_num
-      ring
+      apply (ENNReal.toReal_eq_toReal_iff' (by finiteness) (by finiteness)).mp
+      rw [ENNReal.toReal_add (by finiteness) (by finiteness)]
+      norm_num [ENNReal.toReal_div, ENNReal.toReal_mul]
+
+/-- The tighter density also proves the earlier eighteen-block bound. -/
+theorem activeSlotDensity_sum_le [Fintype Block] :
+    ∑ slot, activeSlotDensity slot ≤ 18 / (2 : ENNReal) ^ 128 := by
+  apply activeSlotDensity_sum_le_tight.trans
+  apply ENNReal.div_le_div_right
+  apply (ENNReal.div_le_iff (by norm_num) (by finiteness)).mpr
+  norm_num
+
+/-- The tighter point bound uses the actual independent row sources. -/
+theorem pointBranchCollision_mass_le_tight [Fintype Block]
+    (visible : Fin FieldMacToECMac.outputMacCount → VisibleRowSample)
+    (rows : Fin FieldMacToECMac.outputMacCount → Coordinates.Rows)
+    (input : AffineInput) (targets : Fin FieldMacToECMac.outputMacCount →
+      FieldMacToECMac.HomogeneousValue) :
+    (PMF.uniformOfFintype (Fin FieldMacToECMac.outputMacCount → HiddenRowSample)).toOuterMeasure
+      {hidden | pointBranchCollision visible rows input targets hidden} ≤
+        (169786660680 / 1000) / (2 : ENNReal) ^ 128 := by
+  have bound := @pointBranchCollision_mass_le ‹Fintype Block› visible rows input targets
+  apply bound.trans
+  simp only [Finset.sum_const, Finset.card_univ, pointRowPair_card, nsmul_eq_mul,
+    ← Finset.mul_sum, Fintype.card_fin]
+  have bound := mul_le_mul_right activeSlotDensity_sum_le_tight
+    (12 * 254 * 4095 : ENNReal)
+  convert bound using 1 <;>
+    norm_num [PointGateFamily, coordinateBitCount, Fintype.card_sum, Fintype.card_fin,
+      mul_assoc, ← mul_div_assoc] <;> first | rfl | ring
 
 /-- The point birthday term uses the actual independent row sources. -/
 theorem pointBranchCollision_mass_le_blocks [Fintype Block]

@@ -10,7 +10,7 @@ noncomputable section
 
 attribute [local instance] rawBucketUseFintype fixedQueryDomainFintype rawInactiveBucketFintype residualFixedQueryDomainFintype
 
-/-- The actual circuit uses one curve gate or 91 point gates in each used slot. -/
+/-- The actual circuit uses one curve gate or 92 point gates in each used slot. -/
 def circuitBucketSize (index : Pipeline.FixedKeyIndex) : Nat :=
   match index.kind with
   | .curve _ => 1
@@ -132,12 +132,12 @@ theorem circuitPointBucket_card (coordinate : Pipeline.PointCoordinate) (adaptor
     simp_all [circuitBucketSize, FieldMacToECMac.outputMacCount]
 
 private theorem outputTweak_injective :
-    Function.Injective (fun row : Fin FieldMacToECMac.outputMacCount => BitVec.ofNat 128 (row.val + 1)) := by
+    Function.Injective (fun row : Fin FieldMacToECMac.outputMacCount => BitVec.ofNat 128 row.val) := by
   intro first second equal
   have numeric := congrArg BitVec.toNat equal
   simp only [BitVec.toNat_ofNat] at numeric
-  have firstBound : first.val + 1 < 2 ^ 128 := by have := first.isLt; unfold FieldMacToECMac.outputMacCount at this; omega
-  have secondBound : second.val + 1 < 2 ^ 128 := by have := second.isLt; unfold FieldMacToECMac.outputMacCount at this; omega
+  have firstBound : first.val < 2 ^ 128 := by have := first.isLt; unfold FieldMacToECMac.outputMacCount at this; omega
+  have secondBound : second.val < 2 ^ 128 := by have := second.isLt; unfold FieldMacToECMac.outputMacCount at this; omega
   rw [Nat.mod_eq_of_lt firstBound, Nat.mod_eq_of_lt secondBound] at numeric
   apply Fin.ext
   omega

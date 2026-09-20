@@ -11,7 +11,7 @@ open scoped ENNReal
 
 noncomputable section
 
-/-- This index lists the five curve adaptors and all 91 rows of point adaptors. -/
+/-- This index lists the five curve adaptors and all 92 rows of point adaptors. -/
 abbrev RawCircuitGate := (Fin 5 × Fin coordinateBitCount) ⊕
   (Fin FieldMacToECMac.outputMacCount ×
     ((Fin 4 × Fin coordinateBitCount) ⊕ (Fin 3 × Fin coordinateBitCount) ⊕
@@ -84,7 +84,8 @@ def rawBucketDomain {Gate : Type} (gates : Gate → RawGatePrescription)
 
 def rawBucketRange {Gate : Type} (gates : Gate → RawGatePrescription)
     (index : Pipeline.FixedKeyIndex) (use : RawBucketUse gates index) : Block :=
-  (gates use.1.1).offset use.1.2 ^^^ (gates use.1.1).label use.1.2
+  (gates use.1.1).offset use.1.2 ^^^
+    gateInput (gates use.1.1).location ((gates use.1.1).label use.1.2)
 
 local instance rawBucketUseFintype {Gate : Type} [Fintype Gate]
     (gates : Gate → RawGatePrescription) (index : Pipeline.FixedKeyIndex) :
@@ -297,7 +298,7 @@ theorem rawRealOracleTranscript_mass {Gate : Type} [Fintype Gate] [Fintype Block
   rw [event]
   exact rawFixedTranscript_mass gates randomness.fixedKeyOracle _ fixed.1 domainsDistinct rangesDistinct
 
-/-- This prescription uses the actual 91 digit tweaks in one point adaptor. -/
+/-- This prescription uses the actual 92 digit tweaks in one point adaptor. -/
 def pointRawGatePrescription (coordinate : Pipeline.PointCoordinate) (adaptor : Pipeline.PointAdaptor)
     (window : Nat) (key : BitAdaptor.Key)
     (slopes : Fin FieldMacToECMac.outputMacCount → BaseField)
@@ -362,7 +363,7 @@ def rawBucketTweak {Gate : Type} (gates : Gate → RawGatePrescription)
 
 def rawBucketOffset {Gate : Type} (gates : Gate → RawGatePrescription)
     (index : Pipeline.FixedKeyIndex) (use : RawBucketUse gates index) : Block :=
-  (gates use.1.1).offset use.1.2
+  (gates use.1.1).offset use.1.2 ^^^ (gates use.1.1).location.tweak
 
 theorem rawGatesWithLabels_domain {Gate : Type} (gates : Gate → RawGatePrescription)
     (labels : RawLabelBucket → Bool → Block) (index : Pipeline.FixedKeyIndex) :
@@ -382,7 +383,11 @@ theorem rawGatesWithLabels_range {Gate : Type} (gates : Gate → RawGatePrescrip
   funext use
   rcases use with ⟨⟨gate, slot⟩, bucket⟩
   subst index
-  cases slot <;> rfl
+  cases slot <;>
+    simp [rawBucketRange, rawBucketOffset, rawGatesWithLabels, RawGatePrescription.offset,
+      RawGatePrescription.label, gateInput, rawLabelBucket, fixedKeyIndex, rawSlotBranch,
+      BitVec.xor_assoc, BitVec.xor_comm] <;>
+    rw [← BitVec.xor_assoc, BitVec.xor_comm (gates gate).location.tweak, BitVec.xor_assoc]
 
 /-- The selected branch uses its public label. The other branch uses one shared hidden label. -/
 def rawMixedLabels {Wire : Type} (selected : RawLabelBucket → Bool)

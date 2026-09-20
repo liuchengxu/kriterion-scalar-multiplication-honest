@@ -30,7 +30,7 @@ theorem setupCode_law : setupCode.law.map Prod.fst = offlineReady.law := by
   rw [← PMF.map_comp, SimulatorSamplingCost.offline_law]
   rfl
 
-theorem setupCode_bound : SimulatorSamplingCost.Bounded setupCode 2813668 := by
+theorem setupCode_bound : SimulatorSamplingCost.Bounded setupCode 2605005 := by
   intro Seed random seed
   have bound := SimulatorSamplingCost.offline_bound Seed random seed
   simp only [setupCode, Code.map_run, readyWithCost_count]
@@ -42,7 +42,7 @@ theorem setupCode_size : setupCode.DrawSizeLe (2 ^ 256) :=
 /-- The setup charge also bounds tapes that use fallback values. -/
 theorem setup_work {Seed : Type}
     (random : (width : Nat) → Seed → Fin (2 ^ width) × Seed) (attempts : Nat) (seed : Seed) :
-    ((setup attempts).run random seed).1.1.2 ≤ 2813668 := by
+    ((setup attempts).run random seed).1.1.2 ≤ 2605005 := by
   unfold setup
   rw [Code.total_run]
   exact setupCode_bound Seed (totalRandom random attempts) seed
@@ -342,14 +342,14 @@ theorem game_law [FieldCertificate] [GroupCertificate] {Aux : Type}
     (attempts : Nat) (adversary : ThreePhase.Adversary Aux) (parameter : Nat)
     (scalar : NonZeroScalar) (auxiliary : Aux) :
     TotalLaw attempts
-      (1813496 + adversary.preQueryBudget parameter + adversary.inputQueryBudget parameter +
+      (1674813 + adversary.preQueryBudget parameter + adversary.inputQueryBudget parameter +
         adversary.decisionQueryBudget parameter)
       (operationalIdealGame adversary parameter scalar auxiliary)
       (game attempts adversary parameter scalar auxiliary) := by
   rw [← exactGame_eq]
   have law := (setup_law attempts).bind fun prepared =>
     continuation_law attempts adversary parameter scalar auxiliary prepared.1 prepared.2 (initial initialMetadata)
-  have closed := law.weaken (second := 1813496 + adversary.preQueryBudget parameter +
+  have closed := law.weaken (second := 1674813 + adversary.preQueryBudget parameter +
     adversary.inputQueryBudget parameter + adversary.decisionQueryBudget parameter) (by omega)
   simpa only [exactGame, game, PMF.bind_map, Function.comp_def] using closed
 
@@ -403,7 +403,7 @@ theorem resources [FieldCertificate] [GroupCertificate] {Aux Seed : Type}
     let table := prepared.1.1.1.2
     let n := adversary.preQueryBudget parameter + adversary.inputQueryBudget parameter +
       836423 + adversary.decisionQueryBudget parameter
-    let draws := 907731 + n
+    let draws := 838390 + n
     let bits := draws * (257 * 256)
     ∀ before : (adversary.Before × SparseState) × Nat × Nat,
       before ∈ (ExternalBits.runTotalWithResources 256
@@ -420,11 +420,11 @@ theorem resources [FieldCertificate] [GroupCertificate] {Aux Seed : Type}
         (adversary.decide parameter table encoded.1.1 auxiliary chosen.1.1.2) encoded.1.2.1
         (adversary.preQueryBudget parameter + adversary.inputQueryBudget parameter + 836423)).support →
       prepared.1.1.2 + before.2.1 + chosen.2.1 + encoded.2.2.1 + decided.2.1 ≤
-        53997367 + n * (10 * n + 16) ∧
+        53788704 + n * (10 * n + 16) ∧
       prepared.2 + before.2.2 + chosen.2.2 + encoded.2.2.2 + decided.2.2 ≤ bits ∧
       prepared.1.1.2 + before.2.1 + chosen.2.1 + encoded.2.2.1 + decided.2.1 +
         4 * (prepared.2 + before.2.2 + chosen.2.2 + encoded.2.2.2 + decided.2.2) + draws ≤
-          53997367 + n * (10 * n + 16) + 4 * bits + draws ∧
+          53788704 + n * (10 * n + 16) + 4 * bits + draws ∧
       Nonempty (Cost.StateBound decided.1.2 n) := by
   dsimp only
   intro before beforeReached chosen chosenReached

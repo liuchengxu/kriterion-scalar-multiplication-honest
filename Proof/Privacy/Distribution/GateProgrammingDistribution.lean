@@ -173,7 +173,7 @@ theorem programFixedSlot_uniform (state : SimulatorState)
     (location : Pipeline.FixedKeyLocation) (window : Nat) (slot : Pipeline.FixedKeySlot)
     (label block : Block)
     (fresh : FreshPermutationPair state.fixedTranscript (fixedKeyIndex location window slot)
-      (gateInput location label) (block ^^^ label))
+      (gateInput location label) (block ^^^ (gateInput location label)))
     [Nonempty (TranscriptOracle state.fixedTranscript)] :
     let record := fixedProgramRecord location window slot label block
     letI : Nonempty (TranscriptOracle (record :: state.fixedTranscript)) :=

@@ -40,7 +40,8 @@ private theorem rawSourceRecord_range (oracle : SimulatorOracleCoin) (bridgeKey 
       (EncPRF.whiteningKeys oracle.hashOracle bridgeKey) key
     ((sourceGatePrescription source pointKey key lifts gate).slotRecord slot).range =
       circuitSourceOffset source lifts gate slot ^^^
-        BitAdaptor.encode (circuitGateKey pointKey key gate) (rawSlotBranch slot) := by
+        (BitAdaptor.encode (circuitGateKey pointKey key gate) (rawSlotBranch slot) ^^^
+          (rawCircuitLocation gate).tweak) := by
   cases slot <;> rfl
 
 /-- A good actual label flag gives prefix freshness for every raw gate slot. -/
@@ -363,10 +364,13 @@ theorem reconstructedCircuitSource_pointOffset_injective (sample : PublicSample)
     let source := reconstructedCircuitSource sample mask rows input curveTarget targets
     Function.Injective (fun row => circuitSourceOffset source
       (fun gate => goodHashLiftSource ((circuitMaskHashSplitEquiv source).1 gate))
-      (pointRawGate row family bit) slot) := by
+      (pointRawGate row family bit) slot ^^^
+        (rawCircuitLocation (pointRawGate row family bit)).tweak) := by
   dsimp only
   simp_rw [reconstructedCircuitSource_pointOffset]
-  exact pointBranchCollision_false_injective _ rows input targets _ good family bit slot
+  have bound := pointBranchCollision_false_injective _ rows input targets _ good family bit slot
+  rcases family with gate | (gate | gate) <;>
+    exact bound
 
 theorem reconstructedCircuitSource_bucketOffset_injective (sample : PublicSample) (mask : BaseField)
     (rows : Fin FieldMacToECMac.outputMacCount → Coordinates.Rows) (input : AffineInput)
@@ -380,7 +384,8 @@ theorem reconstructedCircuitSource_bucketOffset_injective (sample : PublicSample
     let source := reconstructedCircuitSource sample mask rows input curveTarget targets
     Function.Injective (fun row => circuitSourceOffset source
       (fun gate => goodHashLiftSource ((circuitMaskHashSplitEquiv source).1 gate))
-      (circuitBucketGate index row) index.slot) := by
+      (circuitBucketGate index row) index.slot ^^^
+        (rawCircuitLocation (circuitBucketGate index row)).tweak) := by
   dsimp only
   rcases index with ⟨kind, bit, slot⟩
   cases kind with

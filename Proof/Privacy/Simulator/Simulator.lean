@@ -152,11 +152,11 @@ structure HashRecord where
   output : Block × Block
 
 /-- This state is shared by every simulator layer. -/
-structure SimulatorState where
-  fixedOracle : PermutationOracle Pipeline.FixedKeyIndex Block
+structure SimulatorState (FixedIndex : Type := Pipeline.FixedKeyIndex) where
+  fixedOracle : PermutationOracle FixedIndex Block
   encOracle : PermutationOracle EncPRF.PermutationIndex Block
   hashOracle : EncPRF.HashOracle
-  fixedTranscript : List (PermutationRecord Pipeline.FixedKeyIndex Block)
+  fixedTranscript : List (PermutationRecord FixedIndex Block)
   encTranscript : List (PermutationRecord EncPRF.PermutationIndex Block)
   hashTranscript : List HashRecord
   commitments : List LabelCommitment
@@ -700,12 +700,12 @@ theorem hashTranscriptMatches_consistent {oracle : EncPRF.HashOracle}
   rw [← matchesOracle first firstMember, ← matchesOracle second secondMember, sameInput]
 
 /-- This key uses the exact non-black-box relation. -/
-def SimulatorState.linkedKey (state : SimulatorState) : Option InputMacKey :=
+def SimulatorState.linkedKey {FixedIndex : Type} (state : SimulatorState FixedIndex) : Option InputMacKey :=
   state.linking.map fun linking =>
     linkedInputKey state.encOracle state.hashOracle linking.bridgeKey linking.sourceKey
 
 /-- This invariant covers every public oracle and every layer label. -/
-def SimulatorInvariant (state : SimulatorState) : Prop :=
+def SimulatorInvariant {FixedIndex : Type} (state : SimulatorState FixedIndex) : Prop :=
   PermutationTranscriptMatches state.fixedOracle state.fixedTranscript ∧
     PermutationTranscriptMatches state.encOracle state.encTranscript ∧
       HashTranscriptMatches state.hashOracle state.hashTranscript ∧
@@ -736,7 +736,7 @@ theorem swapHashStateTarget_preservesInvariant
   exact invariant.2.2.1 record member
 
 /-- The shared invariant gives consistent public-oracle transcripts. -/
-theorem SimulatorInvariant.transcriptsConsistent {state : SimulatorState}
+theorem SimulatorInvariant.transcriptsConsistent {FixedIndex : Type} {state : SimulatorState FixedIndex}
     (invariant : SimulatorInvariant state) :
     ConsistentPermutationTranscript state.fixedTranscript ∧
       ConsistentPermutationTranscript state.encTranscript :=
@@ -762,65 +762,65 @@ theorem initialState_invariant (randomness : Garbling.Randomness) :
     HashTranscriptMatches, DistinctCommitments]
 
 /-- This operation programs one fresh fixed-key permutation pair. -/
-def programFixed (state : SimulatorState) (index : Pipeline.FixedKeyIndex)
-    (input output : Block) : SimulatorState :=
+def programFixed {FixedIndex : Type} [DecidableEq FixedIndex] (state : SimulatorState FixedIndex) (index : FixedIndex)
+    (input output : Block) : SimulatorState FixedIndex :=
   { state with
     fixedOracle := programPermutation state.fixedOracle index input output
     fixedTranscript := PermutationRecord.mk .program .simulator index input output ::
       state.fixedTranscript }
 
 /-- This operation programs one fresh EncPRF permutation pair. -/
-def programEnc (state : SimulatorState) (index : EncPRF.PermutationIndex)
-    (input output : Block) : SimulatorState :=
+def programEnc {FixedIndex : Type} (state : SimulatorState FixedIndex) (index : EncPRF.PermutationIndex)
+    (input output : Block) : SimulatorState FixedIndex :=
   { state with
     encOracle := programPermutation state.encOracle index input output
     encTranscript := PermutationRecord.mk .program .simulator index input output ::
       state.encTranscript }
 
 /-- This operation programs one fresh random-oracle input. -/
-def programHash (state : SimulatorState) (input : BaseField)
-    (output : Block × Block) : SimulatorState :=
+def programHash {FixedIndex : Type} (state : SimulatorState FixedIndex) (input : BaseField)
+    (output : Block × Block) : SimulatorState FixedIndex :=
   { state with
     hashOracle := Function.update state.hashOracle input output
     hashTranscript := { input := input, output := output } :: state.hashTranscript }
 
 /-- This operation records a programming collision. -/
-def markBad (state : SimulatorState) : SimulatorState := { state with bad := true }
+def markBad {FixedIndex : Type} (state : SimulatorState FixedIndex) : SimulatorState FixedIndex := { state with bad := true }
 
 /-- This operation programs one fixed-key pair or records a collision. -/
-def tryProgramFixed (state : SimulatorState) (index : Pipeline.FixedKeyIndex)
-    (input output : Block) : SimulatorState :=
+def tryProgramFixed {FixedIndex : Type} [DecidableEq FixedIndex] (state : SimulatorState FixedIndex) (index : FixedIndex)
+    (input output : Block) : SimulatorState FixedIndex :=
   if freshPermutationPairCheck state.fixedTranscript index input output
   then programFixed state index input output else markBad state
 
 /-- This operation programs one EncPRF pair or records a collision. -/
-def tryProgramEnc (state : SimulatorState) (index : EncPRF.PermutationIndex)
-    (input output : Block) : SimulatorState :=
+def tryProgramEnc {FixedIndex : Type} (state : SimulatorState FixedIndex) (index : EncPRF.PermutationIndex)
+    (input output : Block) : SimulatorState FixedIndex :=
   if freshPermutationPairCheck state.encTranscript index input output
   then programEnc state index input output else markBad state
 
 /-- This operation programs one random-oracle input or records a collision. -/
-def tryProgramHash (state : SimulatorState) (input : BaseField)
-    (output : Block × Block) : SimulatorState :=
+def tryProgramHash {FixedIndex : Type} (state : SimulatorState FixedIndex) (input : BaseField)
+    (output : Block × Block) : SimulatorState FixedIndex :=
   if freshHashInputCheck state.hashTranscript input
   then programHash state input output else markBad state
 
 /-- A prior collision remains recorded after checked fixed-key programming. -/
-theorem tryProgramFixed_bad_of_bad (state : SimulatorState)
-    (index : Pipeline.FixedKeyIndex) (input output : Block)
+theorem tryProgramFixed_bad_of_bad {FixedIndex : Type} [DecidableEq FixedIndex] (state : SimulatorState FixedIndex)
+    (index : FixedIndex) (input output : Block)
     (bad : state.bad = true) :
     (tryProgramFixed state index input output).bad = true := by
   unfold tryProgramFixed
   split <;> simp_all [programFixed, markBad]
 
-theorem programHash_apply (state : SimulatorState) (input : BaseField)
+theorem programHash_apply {FixedIndex : Type} (state : SimulatorState FixedIndex) (input : BaseField)
     (output : Block × Block) :
     (programHash state input output).hashOracle input = output := by
   exact Function.update_self input output state.hashOracle
 
 /-- Fresh fixed-key programming preserves the shared invariant. -/
-theorem programFixed_preservesInvariant {state : SimulatorState}
-    {index : Pipeline.FixedKeyIndex} {input output : Block}
+theorem programFixed_preservesInvariant {FixedIndex : Type} [DecidableEq FixedIndex] {state : SimulatorState FixedIndex}
+    {index : FixedIndex} {input output : Block}
     (invariant : SimulatorInvariant state)
     (fresh : FreshPermutationPair state.fixedTranscript index input output) :
     SimulatorInvariant (programFixed state index input output) := by
@@ -833,7 +833,7 @@ theorem programFixed_preservesInvariant {state : SimulatorState}
       (invariant.1 record member) (fresh record member)
 
 /-- Fresh EncPRF programming preserves the shared invariant. -/
-theorem programEnc_preservesInvariant {state : SimulatorState}
+theorem programEnc_preservesInvariant {FixedIndex : Type} {state : SimulatorState FixedIndex}
     {index : EncPRF.PermutationIndex} {input output : Block}
     (invariant : SimulatorInvariant state)
     (fresh : FreshPermutationPair state.encTranscript index input output) :
@@ -847,7 +847,7 @@ theorem programEnc_preservesInvariant {state : SimulatorState}
       (invariant.2.1 record member) (fresh record member)
 
 /-- Fresh random-oracle programming preserves the shared invariant. -/
-theorem programHash_preservesInvariant {state : SimulatorState}
+theorem programHash_preservesInvariant {FixedIndex : Type} {state : SimulatorState FixedIndex}
     {input : BaseField} {output : Block × Block}
     (invariant : SimulatorInvariant state)
     (fresh : FreshHashInput state.hashTranscript input) :
@@ -862,8 +862,8 @@ theorem programHash_preservesInvariant {state : SimulatorState}
     exact invariant.2.2.1 record member
 
 /-- Checked fixed-key programming preserves the shared invariant. -/
-theorem tryProgramFixed_preservesInvariant (state : SimulatorState)
-    (index : Pipeline.FixedKeyIndex) (input output : Block)
+theorem tryProgramFixed_preservesInvariant {FixedIndex : Type} [DecidableEq FixedIndex] (state : SimulatorState FixedIndex)
+    (index : FixedIndex) (input output : Block)
     (invariant : SimulatorInvariant state) :
     SimulatorInvariant (tryProgramFixed state index input output) := by
   by_cases checked : freshPermutationPairCheck state.fixedTranscript index input output = true
@@ -872,7 +872,7 @@ theorem tryProgramFixed_preservesInvariant (state : SimulatorState)
   · simpa [tryProgramFixed, checked, markBad, SimulatorInvariant] using invariant
 
 /-- Checked EncPRF programming preserves the shared invariant. -/
-theorem tryProgramEnc_preservesInvariant (state : SimulatorState)
+theorem tryProgramEnc_preservesInvariant {FixedIndex : Type} (state : SimulatorState FixedIndex)
     (index : EncPRF.PermutationIndex) (input output : Block)
     (invariant : SimulatorInvariant state) :
     SimulatorInvariant (tryProgramEnc state index input output) := by
@@ -882,7 +882,7 @@ theorem tryProgramEnc_preservesInvariant (state : SimulatorState)
   · simpa [tryProgramEnc, checked, markBad, SimulatorInvariant] using invariant
 
 /-- Checked random-oracle programming preserves the shared invariant. -/
-theorem tryProgramHash_preservesInvariant (state : SimulatorState)
+theorem tryProgramHash_preservesInvariant {FixedIndex : Type} (state : SimulatorState FixedIndex)
     (input : BaseField) (output : Block × Block)
     (invariant : SimulatorInvariant state) :
     SimulatorInvariant (tryProgramHash state input output) := by
@@ -892,8 +892,8 @@ theorem tryProgramHash_preservesInvariant (state : SimulatorState)
   · simpa [tryProgramHash, checked, markBad, SimulatorInvariant] using invariant
 
 /-- Checked fixed-key programming succeeds or records a collision. -/
-theorem tryProgramFixed_badOrFresh (state : SimulatorState)
-    (index : Pipeline.FixedKeyIndex) (input output : Block) :
+theorem tryProgramFixed_badOrFresh {FixedIndex : Type} [DecidableEq FixedIndex] (state : SimulatorState FixedIndex)
+    (index : FixedIndex) (input output : Block) :
     (tryProgramFixed state index input output).bad = true ∨
       FreshPermutationPair state.fixedTranscript index input output := by
   by_cases checked : freshPermutationPairCheck state.fixedTranscript index input output = true
@@ -901,8 +901,8 @@ theorem tryProgramFixed_badOrFresh (state : SimulatorState)
   · simp [tryProgramFixed, checked, markBad]
 
 /-- A non-bad result implies a non-bad prior state. -/
-theorem tryProgramFixed_priorNotBad (state : SimulatorState)
-    (index : Pipeline.FixedKeyIndex) (input output : Block)
+theorem tryProgramFixed_priorNotBad {FixedIndex : Type} [DecidableEq FixedIndex] (state : SimulatorState FixedIndex)
+    (index : FixedIndex) (input output : Block)
     (notBad : (tryProgramFixed state index input output).bad = false) :
     state.bad = false := by
   by_cases checked : freshPermutationPairCheck state.fixedTranscript index input output = true
@@ -910,8 +910,8 @@ theorem tryProgramFixed_priorNotBad (state : SimulatorState)
   · simp [tryProgramFixed, checked, markBad] at notBad
 
 /-- A non-bad result contains the requested fixed-key pair. -/
-theorem tryProgramFixed_apply_of_notBad (state : SimulatorState)
-    (index : Pipeline.FixedKeyIndex) (input output : Block)
+theorem tryProgramFixed_apply_of_notBad {FixedIndex : Type} [DecidableEq FixedIndex] (state : SimulatorState FixedIndex)
+    (index : FixedIndex) (input output : Block)
     (notBad : (tryProgramFixed state index input output).bad = false) :
     (tryProgramFixed state index input output).fixedOracle.permutation index input = output := by
   by_cases checked : freshPermutationPairCheck state.fixedTranscript index input output = true
@@ -919,8 +919,8 @@ theorem tryProgramFixed_apply_of_notBad (state : SimulatorState)
   · simp [tryProgramFixed, checked, markBad] at notBad
 
 /-- Programming a different index preserves one fixed-key pair. -/
-theorem tryProgramFixed_preservesOther (state : SimulatorState)
-    (oldIndex newIndex : Pipeline.FixedKeyIndex) (oldInput oldOutput input output : Block)
+theorem tryProgramFixed_preservesOther {FixedIndex : Type} [DecidableEq FixedIndex] (state : SimulatorState FixedIndex)
+    (oldIndex newIndex : FixedIndex) (oldInput oldOutput input output : Block)
     (different : oldIndex ≠ newIndex)
     (prior : state.fixedOracle.permutation oldIndex oldInput = oldOutput) :
     (tryProgramFixed state newIndex input output).fixedOracle.permutation oldIndex oldInput =
@@ -930,7 +930,7 @@ theorem tryProgramFixed_preservesOther (state : SimulatorState)
   · simpa [tryProgramFixed, checked, markBad] using prior
 
 /-- Checked EncPRF programming succeeds or records a collision. -/
-theorem tryProgramEnc_badOrFresh (state : SimulatorState)
+theorem tryProgramEnc_badOrFresh {FixedIndex : Type} (state : SimulatorState FixedIndex)
     (index : EncPRF.PermutationIndex) (input output : Block) :
     (tryProgramEnc state index input output).bad = true ∨
       FreshPermutationPair state.encTranscript index input output := by
@@ -939,7 +939,7 @@ theorem tryProgramEnc_badOrFresh (state : SimulatorState)
   · simp [tryProgramEnc, checked, markBad]
 
 /-- Checked random-oracle programming succeeds or records a collision. -/
-theorem tryProgramHash_badOrFresh (state : SimulatorState)
+theorem tryProgramHash_badOrFresh {FixedIndex : Type} (state : SimulatorState FixedIndex)
     (input : BaseField) (output : Block × Block) :
     (tryProgramHash state input output).bad = true ∨
       FreshHashInput state.hashTranscript input := by
@@ -948,17 +948,17 @@ theorem tryProgramHash_badOrFresh (state : SimulatorState)
   · simp [tryProgramHash, checked, markBad]
 
 /-- This operation records one fixed-key permutation pair. -/
-def recordFixed (state : SimulatorState)
-    (record : PermutationRecord Pipeline.FixedKeyIndex Block) : SimulatorState :=
+def recordFixed {FixedIndex : Type} (state : SimulatorState FixedIndex)
+    (record : PermutationRecord FixedIndex Block) : SimulatorState FixedIndex :=
   { state with fixedTranscript := record :: state.fixedTranscript }
 
 /-- This operation records one EncPRF permutation pair. -/
-def recordEnc (state : SimulatorState)
-    (record : PermutationRecord EncPRF.PermutationIndex Block) : SimulatorState :=
+def recordEnc {FixedIndex : Type} (state : SimulatorState FixedIndex)
+    (record : PermutationRecord EncPRF.PermutationIndex Block) : SimulatorState FixedIndex :=
   { state with encTranscript := record :: state.encTranscript }
 
 /-- This operation records one random-oracle query. -/
-def recordHash (state : SimulatorState) (record : HashRecord) : SimulatorState :=
+def recordHash {FixedIndex : Type} (state : SimulatorState FixedIndex) (record : HashRecord) : SimulatorState FixedIndex :=
   { state with hashTranscript := record :: state.hashTranscript }
 
 /-- This operation records one label constraint. -/
@@ -967,8 +967,8 @@ def addCommitment (state : SimulatorState)
   { state with commitments := commitment :: state.commitments }
 
 /-- A compatible fixed-key record preserves the shared invariant. -/
-theorem recordFixed_preservesInvariant {state : SimulatorState}
-    {record : PermutationRecord Pipeline.FixedKeyIndex Block}
+theorem recordFixed_preservesInvariant {FixedIndex : Type} {state : SimulatorState FixedIndex}
+    {record : PermutationRecord FixedIndex Block}
     (invariant : SimulatorInvariant state)
     (recordMatches : state.fixedOracle.permutation record.index record.domain = record.range) :
     SimulatorInvariant (recordFixed state record) := by
@@ -976,7 +976,7 @@ theorem recordFixed_preservesInvariant {state : SimulatorState}
     invariant.2⟩
 
 /-- A compatible EncPRF record preserves the shared invariant. -/
-theorem recordEnc_preservesInvariant {state : SimulatorState}
+theorem recordEnc_preservesInvariant {FixedIndex : Type} {state : SimulatorState FixedIndex}
     {record : PermutationRecord EncPRF.PermutationIndex Block}
     (invariant : SimulatorInvariant state)
     (recordMatches : state.encOracle.permutation record.index record.domain = record.range) :
@@ -986,7 +986,7 @@ theorem recordEnc_preservesInvariant {state : SimulatorState}
     invariant.2.2⟩
 
 /-- An exact random-oracle record preserves the shared invariant. -/
-theorem recordHash_preservesInvariant {state : SimulatorState} {record : HashRecord}
+theorem recordHash_preservesInvariant {FixedIndex : Type} {state : SimulatorState FixedIndex} {record : HashRecord}
     (invariant : SimulatorInvariant state)
     (recordMatches : state.hashOracle record.input = record.output) :
     SimulatorInvariant (recordHash state record) := by
@@ -1005,8 +1005,8 @@ theorem addCommitment_preservesInvariant {state : SimulatorState}
     List.pairwise_cons.mpr ⟨fresh, invariant.2.2.2⟩⟩
 
 /-- This handler records every public-oracle query with its origin. -/
-def oracleHandlerFor (origin : PermutationOrigin) :
-    OracleHandler Garbling.oracleSpec SimulatorState
+def oracleHandlerFor {FixedIndex : Type} (origin : PermutationOrigin) :
+    OracleHandler (publicOracleSpec FixedIndex EncPRF.PermutationIndex) (SimulatorState FixedIndex)
   | .fixedForward index input, state =>
       let output := state.fixedOracle.permutation index input
       (output, recordFixed state
@@ -1028,11 +1028,11 @@ def oracleHandlerFor (origin : PermutationOrigin) :
       (output, recordHash state { input := input, output := output })
 
 /-- The ideal handler records every adversary query. -/
-def idealOracleHandler : OracleHandler Garbling.oracleSpec SimulatorState :=
+def idealOracleHandler {FixedIndex : Type} : OracleHandler (publicOracleSpec FixedIndex EncPRF.PermutationIndex) (SimulatorState FixedIndex) :=
   oracleHandlerFor .adversary
 
 /-- This handler records every construction query. -/
-def constructionOracleHandler : OracleHandler Garbling.oracleSpec SimulatorState :=
+def constructionOracleHandler {FixedIndex : Type} : OracleHandler (publicOracleSpec FixedIndex EncPRF.PermutationIndex) (SimulatorState FixedIndex) :=
   oracleHandlerFor .construction
 
 /-- This handler carries one programming target without changing it. -/
@@ -1177,9 +1177,9 @@ theorem oracleProgram_run_swapHash_of_safe
     program sample programSafe
 
 /-- Every public-oracle query preserves the shared invariant. -/
-theorem oracleHandlerFor_preservesInvariant (origin : PermutationOrigin)
-    (query : Garbling.oracleSpec.Query)
-    (state : SimulatorState) (invariant : SimulatorInvariant state) :
+theorem oracleHandlerFor_preservesInvariant {FixedIndex : Type} (origin : PermutationOrigin)
+    (query : (publicOracleSpec FixedIndex EncPRF.PermutationIndex).Query)
+    (state : SimulatorState FixedIndex) (invariant : SimulatorInvariant state) :
     SimulatorInvariant (oracleHandlerFor origin query state).2 := by
   cases query <;> simp only [oracleHandlerFor]
   · exact recordFixed_preservesInvariant invariant rfl
@@ -1188,8 +1188,8 @@ theorem oracleHandlerFor_preservesInvariant (origin : PermutationOrigin)
   · exact recordEnc_preservesInvariant invariant (Equiv.apply_symm_apply _ _)
   · exact recordHash_preservesInvariant invariant rfl
 
-theorem idealOracleHandler_preservesInvariant (query : Garbling.oracleSpec.Query)
-    (state : SimulatorState) (invariant : SimulatorInvariant state) :
+theorem idealOracleHandler_preservesInvariant {FixedIndex : Type} (query : (publicOracleSpec FixedIndex EncPRF.PermutationIndex).Query)
+    (state : SimulatorState FixedIndex) (invariant : SimulatorInvariant state) :
     SimulatorInvariant (idealOracleHandler query state).2 :=
   oracleHandlerFor_preservesInvariant .adversary query state invariant
 

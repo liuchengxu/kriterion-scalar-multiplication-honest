@@ -284,7 +284,8 @@ def publicEquiv : CurvePublicSample × Vector RowPublicSample FieldMacToECMac.ou
   left_inv _ := rfl
   right_inv _ := rfl
 
-/-- The public sample needs 837191 bounded integer draws. It samples no oracle tables. -/
+/-- The public sample needs 837191 bounded integer draws: 91 rows of 9158 draws plus the
+curve gate data. It samples no oracle tables. -/
 def publicSample : Code PublicSample 837191 :=
   (((gateData 3 5).map curveEquiv).pair (row.vector FieldMacToECMac.outputMacCount)).map publicEquiv
 
