@@ -7,7 +7,7 @@ describes the artifact; this file is the accounting behind it.
 
 Two provenance caveats up front. The revision-15 baseline tree inspected here carries no Git metadata, so its
 identity as `argomac-lean@6796e286` is checked against the challenge's own record rather than re-derived. And the
-"exhaustive search" referred to in §4 is described in the neighbouring design notes, not reproved here.
+"exhaustive search" referred to in §5 is described in the neighbouring design notes, not reproved here.
 
 ---
 
@@ -258,7 +258,44 @@ above is stated so the published figures are reproducible.
 
 ---
 
-## 4. What is not claimed
+## 4. The query metrics
+
+Revision 16 scores two quantities beside the byte count: `garble_queries` and `evaluate_queries`. These are not
+sizes. They are the number of oracle calls the garbling program and the evaluating program are declared to make,
+and the declaration lives in the program's **type** — `Program (… ) garbleQueries` — so it is what the challenge
+measures.
+
+The program enumerates, for each of the 91 transmitted rows, each of the three coordinates, each of the five
+adaptor windows at each of the 254 input positions. That is fifteen coordinate/adaptor pairs, but only **twelve**
+are read: the X row omits `x7`, and the Y row — which rebinds `y ^ 2` to `x ^ 3 + 3` — dropped `y8` and `y10`.
+`Construction/OraclePrograms.lean` already recorded that about the *rows*; the program had not followed.
+
+Pruning the three unread pairs:
+
+```
+garble_queries     1,740,917  →  1,394,207     −346,710   (−19.92 %)
+evaluate_queries   1,044,449  →    836,423     −208,026   (−19.92 %)
+ciphertext_bytes   8,887,896  →  8,887,896     unchanged
+```
+
+The garbling saving is exactly `91 × 3 × 5 × 254 = 346,710`, and the evaluating saving is three fifths of it —
+the garbling schedule asks five queries per active gate where the evaluator asks three. Both cost **zero bytes**:
+the bytes are the transmitted tables, and those did not change.
+
+Two points this section is careful about.
+
+- **The declared numeral is a bound, not a count.** It is an upper bound the program must satisfy, so
+  *under*-declaration fails to compile while *over*-declaration compiles silently. The 19.92 % is therefore
+  meaningful only because the boundary is tight, which is established by counting the straight-line query
+  schedule rather than inferred from the type.
+- **Pruning the evaluator needs a precondition the garbling side does not.** `Biquadratic.evaluate` does consult
+  the X row's `x7`, so the pruned evaluation is sound only for tables that do not carry it — the `TransmittedX`
+  property, discharged for every packed table by `transmittedX_unpack`. That is a property of the transmitted
+  table, not of an arbitrary logical one, and it is why the judgement is made at the packed interface.
+
+---
+
+## 5. What is not claimed
 
 - **This is not a general lower bound.** The construction achieves **12 adaptors per row**. The inspected Lean
   results establish its evaluation identities and its encoded size — **not** optimality over all complete

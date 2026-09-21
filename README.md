@@ -1,7 +1,9 @@
 # A smaller garbled circuit for fixed-scalar BN254 multiplication
 
-**Result: `ciphertextBytes = 8,887,896`, against the current revision-15 baseline's 9,806,076
-bytes — a reduction of 918,180 bytes (9.363 %).** Against the pre-revision baseline of 9,699,931 the
+**Result, revision 16 — all three scored metrics improve on the baseline.**
+`ciphertextBytes = 8,887,896` against the baseline's 9,806,076 — a reduction of 918,180 bytes
+(9.363 %). `garbleQueries = 1,394,207` against 1,759,967 and `evaluateQueries = 836,423` against
+1,055,879 — both reduced by 19.92 %, at zero byte cost. Against the pre-revision baseline of 9,699,931 the
 reduction is 812,035 bytes (8.372 %); the baseline grew by 106,145 bytes when the organizers replaced
 a 4-way GLV search with a fixed initial state and paid for it with one extra row. The scored quantity
 is the length of the encoding of the circuit's declared public value, so every byte below is a byte of
@@ -143,7 +145,7 @@ every privacy statement are untouched.
   not a relocation of payload into the Lamport labels, which the challenge forbids and which this
   construction does not do: the labels remain exactly the 508 selected blocks.
 
-- **The revision-15 obligation is met, and the packing survives it.** Revision 15 replaced the
+- **The revision-16 obligation is met, including its query bounds.** Revision 15 replaced the
   existential simulator — `∃ simulator, …` — with a requirement that the privacy proof supply a
   finite `Cryptography.BoundedMachine.Machine` for the complete simulator, with the simulator paying
   machine costs. The packed scheme's obligations are discharged by `Shared.packedCircuit`
@@ -191,10 +193,15 @@ own designs (`B′` and option `A`), one prescribed proof lemma that was provabl
 
 ## 7. Provenance
 
-Derived from the `argomac-lean` baseline and the revision-15 challenge library. Two levers were
+Derived from the `argomac-lean` baseline and the revision-16 challenge library. Two levers were
 developed against the pre-revision baseline (`711689cd`) and then **rebased onto the organizers'
-rewritten baseline** (`Kriterion-cc/argomac-lean@6796e286`, whose 9,806,076 bytes are the current
-reference) after revision 15 changed the privacy obligation; the rebase restored the whole machine
+rewritten baseline** (`Kriterion-cc/argomac-lean@6796e286`) after revision 15 changed the privacy
+obligation; the third lever, the query pruning, was added after the entry was **ported to
+revision 16** (`argomac-lean@c564e51f`, whose 9,806,076 bytes, 1,759,967 and 1,055,879 queries are
+the current reference). Revision 16 scores a bounded query program for the garbler and the
+evaluator, and the entry's programs enumerate only the twelve adaptor kinds each row reads — X
+omits `x7`, and the Y row dropped `y8` and `y10` — where the baseline enumerates all fifteen. The
+rebase restored the whole machine
 layer and, along the way, corrected 33 statements in that tree that were false under the new
 construction — including two that were provably false rather than stale. The full cost
 model — the mask-dimension law, the spill-routing rule, the eleven closed doors, and the
