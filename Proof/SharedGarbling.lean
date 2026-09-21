@@ -107,6 +107,20 @@ theorem packedProgramCiphertextSize [FieldCertificate] [GroupCertificate]
       (wireCircuit.garble parameter scalar (replaceOracle tape.1.val tape.2)).1 from rfl]
   exact ciphertextSize parameter scalar (replaceOracle tape.1.val tape.2)
 
+/-- The same byte count at `packedProgramScheme`, which is the term the
+challenge's `scheme` field holds in the entry. Stating it over that constant
+rather than over a lambda keeps the challenge's `ciphertextSize` field
+syntactically its own statement, so the kernel never unfolds the encoder while
+it checks the bundle. -/
+theorem packedProgramSchemeCiphertextSize (field : FieldCertificate)
+    (group : @GroupCertificate field) (parameter : Nat) (scalar : NonZeroScalar)
+    (tape : PrivateCoins × Cryptography.PublicOracle FixedKeyIndex EncPRF.PermutationIndex) :
+    (Wire.encoding.encode ((packedProgramScheme field group).garble parameter scalar tape).1).length =
+      8887896 := by
+  rw [show (packedProgramScheme field group).garble parameter scalar tape =
+      (@packedProgramCircuit field group).garble parameter scalar tape from rfl]
+  exact @packedProgramCiphertextSize field group parameter scalar tape
+
 /-- The packed executable interface keeps the Lamport encoding obligation. -/
 def packedProgramLamportCompatible [FieldCertificate] [GroupCertificate] :
     GarbledCircuit.LamportCompatibility packedProgramCircuit affineLamportBits :=

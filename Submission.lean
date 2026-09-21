@@ -4,25 +4,25 @@ import Construction.OraclePrograms
 import Proof
 import Proof.Privacy.Simulator.Arithmetic.CompiledAdaptiveGame
 
--- The transmitted encoding is a 91-row structure whose `encode` walks the whole
--- table. Unfolding it during elaboration is never needed: its length is proved
--- where it is defined. `irreducible` binds the elaborator only; the kernel still
--- checks every term this file produces.
-attribute [local irreducible] Kriterion.ArgoMAC.Wire.encoding
-
-set_option maxRecDepth 4096
-
 -- The kernel re-checks the whole bundle, and the expensive step in it is a
 -- type-level comparison around `scheme`/`encoding`: the later fields of
 -- `Solution` apply `encoding` to the value `scheme` returns, so the kernel must
--- see through `packedProgramCircuit` to compare the two forms, once per mention.
--- That cost is additive across the fields. `irreducible` above is already in
--- force and does not help, because it binds the elaborator and not the kernel.
--- Measured on the revision-15 port of this same bundle: `type checking took
--- 489s` at 4,000,000 heartbeats, while the 200,000 default stops it after about
--- 34 s. This file is built from scratch by the platform, so the budget has to
--- live here.
-set_option maxHeartbeats 4000000
+-- see through `scheme` to compare the two forms, once per field. Any comparison
+-- that is not syntactic ends in `Wire.encoding`, whose `encode` walks 91 rows of
+-- 8,065-byte adaptors, and that reduction is what the build pays for.
+--
+-- Both forms are therefore pinned to the challenge's own terms instead of
+-- raising a budget:
+--   * `scheme` is `Shared.packedProgramScheme`, a constant declared with the
+--     challenge's `scheme` type, rather than a lambda. A lambda leaves a beta
+--     redex in the type of every later field, which is not syntactic.
+--   * `ciphertextSize` is `Shared.packedProgramSchemeCiphertextSize`, stated
+--     over that same constant.
+-- With those two this file checks in milliseconds (`type checking 1.44ms` over
+-- the whole file) at the DEFAULT heartbeat budget, so it carries no `set_option`
+-- at all. The revision-15 port of the same bundle needed `maxHeartbeats
+-- 4000000` and 8m12s to check the declaration below; the 200,000 default cut it
+-- off after about 34 s.
 
 namespace Submission
 open Kriterion Kriterion.BN254 Kriterion.ArgoMAC
@@ -46,8 +46,8 @@ def solution : Kriterion.Solution := {
   evaluateProgram := fun field group => @Shared.packedEvaluateProgram field group
   garbleProgramCorrect := fun field group => @Shared.packedGarbleProgram_correct field group
   evaluateProgramCorrect := fun field group => @Shared.packedEvaluateProgram_correct field group
-  scheme := fun field group => @Shared.packedProgramCircuit field group
-  ciphertextSize := fun field group => @Shared.packedProgramCiphertextSize field group
+  scheme := Shared.packedProgramScheme
+  ciphertextSize := Shared.packedProgramSchemeCiphertextSize
   lamportCompatible := fun field group => @Shared.packedProgramLamportCompatible field group
   functionCorrect := fun _ _ _ _ => rfl
   perfectCorrectness := fun field group => @Shared.packedProgramPerfectCorrectness field group

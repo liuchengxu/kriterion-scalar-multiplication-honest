@@ -127,4 +127,19 @@ def packedProgramCircuit [FieldCertificate] [GroupCertificate] :
       (PublicOracle FixedKeyIndex EncPRF.PermutationIndex) :=
   programCircuit.mapPublic Pipeline.Table.pack Pipeline.PackedTable.unpack
 
+/-- The packed executable interface under the exact type the challenge's
+`scheme` field declares. The field's own type is a function, so a submission
+that assigns a lambda there forces the kernel to reduce that lambda inside every
+later field type before it can compare the two forms; assigning this constant
+instead keeps every comparison syntactic. The type is written with explicit
+binders and with the challenge's own spellings of the parameters so that it is
+the same term, not merely a definitionally equal one. -/
+def packedProgramScheme (field : FieldCertificate) (group : @GroupCertificate field) :
+    GarbledCircuit BN254.NonZeroScalar BN254.AffineInput (Option (@BN254.Point field))
+      (Shared.PrivateCoins × Cryptography.PublicOracle Shared.FixedKeyIndex
+        EncPRF.PermutationIndex)
+      Pipeline.PackedTable InputMacKey GarbledCircuit.LamportSignature
+      (Cryptography.PublicOracle Shared.FixedKeyIndex EncPRF.PermutationIndex) :=
+  @packedProgramCircuit field group
+
 end Kriterion.ArgoMAC.Shared
