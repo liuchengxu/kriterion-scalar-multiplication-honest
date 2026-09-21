@@ -56,3 +56,41 @@ theorem gateDriverBlock_prefix [BN254.FieldCertificate] (host : Machine) (attemp
   simp [PMF.map_comp, Option.map_map, Function.comp_def, gateDriverPrefixCost, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm]
 
 end Kriterion.ArgoMAC.ArithmeticSimulator
+
+namespace Kriterion.ArgoMAC.ArithmeticSimulator
+open Cryptography Cryptography.BoundedMachine
+
+/-- The fixed-oracle machine uses the same private gate preparation and charge. -/
+theorem lazyGateDriverBlock_prefix [BN254.FieldCertificate]
+    {FixedIndex EncIndex : Type} [Fintype FixedIndex] [Fintype EncIndex]
+    [DecidableEq FixedIndex] [DecidableEq EncIndex] (host : Simulator) (gate : GateCode)
+    (labels : Fin 1036 → Fin (host.size + 1)) (present : ContainsLazyGateDriver host gate labels)
+    (memory : Memory) (oracle : LazyOracle.State FixedIndex EncIndex) (fuel : Nat) :
+    host.run (gateDriverPrefixCost gate memory + fuel) ⟨labels 0, memory⟩ oracle =
+      (host.run fuel ⟨labels 80, gateDriverPrepared gate memory⟩ oracle).map
+        (Option.map fun result => (result.1, result.2.1, result.2.2 + gateDriverPrefixCost gate memory)) := by
+  apply Simulator.run_prefix host (gateDriverPrefixCost gate memory) fuel _ _ oracle
+  let loaded := executeLinear (gateDirectiveLoad gate.selected gate.target gate.quotient gate.table) memory
+  have encoded : loaded.registers 10 = if gateDriverBit gate memory then 1 else 0 := by
+    rw [(gateDirectiveLoad_values gate.selected gate.target gate.quotient gate.table memory).2.2.2.2]
+    exact selected_bit_mask _ _
+  have load := gateDirectiveLoadHost_continue host.arithmetic gate.selected gate.target gate.quotient gate.table
+    (labels ∘ gateDriverLoadLabels) (lazyGateDriverBlock_load host gate labels present) memory
+    (20 + fuel + gateBlocksCost (gateDriverBit gate memory))
+  change run host.arithmetic (21 + (20 + fuel + gateBlocksCost (gateDriverBit gate memory))) ⟨labels 0, memory⟩ =
+    (run host.arithmetic (20 + fuel + gateBlocksCost (gateDriverBit gate memory)) ⟨labels 21, loaded⟩).map _ at load
+  have blocks := gateBlocksHost_continue host.arithmetic gate.tweak (labels ∘ gateDriverBlocksLabels)
+    (lazyGateDriverBlock_blocks host gate labels present) loaded (gateDriverBit gate memory) encoded (20 + fuel)
+  change run host.arithmetic (20 + fuel + gateBlocksCost (gateDriverBit gate memory)) ⟨labels 21, loaded⟩ =
+    (run host.arithmetic (20 + fuel) ⟨labels 60, gateBlocksMemory gate.tweak (gateDriverBit gate memory) loaded⟩).map _ at blocks
+  have save := linear_continue host.arithmetic gateDirectiveSave (labels ∘ gateDriverSaveLabels)
+    (lazyGateDriverBlock_save host gate labels present)
+    (gateBlocksMemory gate.tweak (gateDriverBit gate memory) loaded) fuel
+  change run host.arithmetic (20 + fuel) ⟨labels 60, gateBlocksMemory gate.tweak (gateDriverBit gate memory) loaded⟩ =
+    (run host.arithmetic fuel ⟨labels 80, gateDriverPrepared gate memory⟩).map _ at save
+  rw [show gateDriverPrefixCost gate memory + fuel = 21 + (20 + fuel + gateBlocksCost (gateDriverBit gate memory)) by unfold gateDriverPrefixCost; omega]
+  rw [load, blocks, save]
+  simp only [show gateDirectiveSave.length = 20 from rfl]
+  simp [PMF.map_comp, Option.map_map, Function.comp_def, gateDriverPrefixCost, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm]
+
+end Kriterion.ArgoMAC.ArithmeticSimulator

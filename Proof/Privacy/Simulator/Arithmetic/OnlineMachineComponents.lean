@@ -1,3 +1,4 @@
+import Proof.Privacy.Simulator.Arithmetic.EncLinkLazy
 import Proof.Privacy.Simulator.Arithmetic.OnlineMachineLabels
 import Proof.Privacy.Simulator.Arithmetic.OnlineInputBlock
 import Proof.Privacy.Simulator.Arithmetic.OutputTargetsCode
@@ -171,5 +172,81 @@ theorem onlineMachine_pointGates (attempts : Nat) :
   try rw [onlineCurveCode_eq]
   try rw [onlinePointCode_eq]
   rfl
+
+end Kriterion.ArgoMAC.ArithmeticSimulator
+
+namespace Kriterion.ArgoMAC.ArithmeticSimulator
+open Cryptography.BoundedMachine
+
+/-- The fixed-oracle simulator retains its private input block. -/
+theorem lazyOnlineMachine_input :
+    ContainsOnlineInput lazyOnlineMachine.arithmetic
+      (fun label : Fin 98 => onlineBodyLabels 1 97 (by decide) 98 label.val) := by
+  intro pc inside
+  have bound : pc.val < 97 := inside
+  rw [lazyOnlineMachine_private _ (by
+    simp only [onlineBodyLabels_active _ _ _ _ _ bound]
+    exact ⟨Or.inl (by omega), Or.inl (by omega), Or.inl (by omega)⟩)]
+  exact onlineMachine_input 256 pc inside
+
+/-- The fixed-oracle simulator retains its private samples block. -/
+theorem lazyOnlineMachine_samples :
+    ContainsOnlineSampling lazyOnlineMachine.arithmetic 256
+      (fun label : Fin 8772 => onlineBodyLabels 13622 8771 (by decide) 22393 label.val) := by
+  intro pc inside
+  have bound : pc.val < 8771 := inside
+  rw [lazyOnlineMachine_private _ (by
+    simp only [onlineBodyLabels_active _ _ _ _ _ bound]
+    exact ⟨Or.inl (by omega), Or.inl (by omega), Or.inl (by omega)⟩)]
+  exact onlineMachine_samples 256 pc inside
+
+/-- The fixed-oracle simulator retains its private targets block. -/
+theorem lazyOnlineMachine_targets :
+    ContainsOutputTargets lazyOnlineMachine.arithmetic
+      (fun label : Fin 4289 => onlineBodyLabels 22397 4288 (by decide) 26685 label.val) := by
+  intro pc inside
+  have bound : pc.val < 4288 := inside
+  rw [lazyOnlineMachine_private _ (by
+    simp only [onlineBodyLabels_active _ _ _ _ _ bound]
+    exact ⟨Or.inl (by omega), Or.inl (by omega), Or.inl (by omega)⟩)]
+  exact onlineMachine_targets 256 pc inside
+
+/-- The online machine uses the fixed-oracle link instructions. -/
+theorem lazyOnlineMachine_link :
+    ContainsLazyEncLink lazyOnlineMachine
+      (fun label : Fin 7468 => onlineBranchLabels 1428193 7466 (by decide) 1435659 label.val) := by
+  intro pc inside
+  rw [lazyOnlineMachine_code]
+  unfold lazyOnlineInstruction
+  simp only [onlineBranchLabels_active _ _ _ _ _ inside, Fin.val_mk]
+  rw [dif_pos (show 1428193 ≤ 1428193 + pc.val ∧ 1428193 + pc.val < 1435659 by omega)]
+  simp only [Nat.add_sub_cancel_left]
+
+/-- The online machine uses the fixed-oracle curveGates instructions. -/
+theorem lazyOnlineMachine_curveGates :
+    ContainsLazyGateLoop lazyOnlineMachine curveGatePlan
+      (fun label : Fin 1315722 => onlineBranchLabels 1435662 1315720 (by decide) 2751382 label.val) := by
+  intro pc inside
+  have bound : pc.val < 1315720 := inside
+  rw [lazyOnlineMachine_code]
+  unfold lazyOnlineInstruction
+  simp only [onlineBranchLabels_active _ _ _ _ _ bound]
+  rw [dif_neg (show ¬ (1428193 ≤ 1435662 + pc.val ∧ 1435662 + pc.val < 1435659) by omega)]
+  rw [dif_pos (show 1435662 ≤ 1435662 + pc.val ∧ 1435662 + pc.val < 2751382 by omega)]
+  simp only [Nat.add_sub_cancel_left]
+
+/-- The online machine uses the fixed-oracle pointGates instructions. -/
+theorem lazyOnlineMachine_pointGates :
+    ContainsLazyGateLoop lazyOnlineMachine pointGatePlan
+      (fun label : Fin 287353250 => onlineBranchLabels 2751388 287353248 (by decide) 290104636 label.val) := by
+  intro pc inside
+  have bound : pc.val < 287353248 := inside
+  rw [lazyOnlineMachine_code]
+  unfold lazyOnlineInstruction
+  simp only [onlineBranchLabels_active _ _ _ _ _ bound]
+  rw [dif_neg (show ¬ (1428193 ≤ 2751388 + pc.val ∧ 2751388 + pc.val < 1435659) by omega)]
+  rw [dif_neg (show ¬ (1435662 ≤ 2751388 + pc.val ∧ 2751388 + pc.val < 2751382) by omega)]
+  rw [dif_pos (show 2751388 ≤ 2751388 + pc.val ∧ 2751388 + pc.val < 290104636 by omega)]
+  simp only [Nat.add_sub_cancel_left]
 
 end Kriterion.ArgoMAC.ArithmeticSimulator

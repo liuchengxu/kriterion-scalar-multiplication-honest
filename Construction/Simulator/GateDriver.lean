@@ -83,3 +83,22 @@ def gateDriver (attempts : Nat) (gate : GateCode) : Machine := ⟨1035, Vector.o
     | _ => .halt), by decide⟩
 
 end Kriterion.ArgoMAC.ArithmeticSimulator
+
+namespace Kriterion.ArgoMAC.ArithmeticSimulator
+open Cryptography.BoundedMachine
+
+/-- The fixed oracle replaces each history scan and programming overlay. -/
+def lazyGateInstruction (gate : GateCode) (pc : Fin 1036) : SimulatorInstruction 1036 :=
+  match pc.val with
+  | 88 => .compute (.constant 0 14 89)
+  | 89 => .compute (.load 1 0 90)
+  | 90 => .program 0 9 8 1 2 393
+  | 401 => .compute (.constant 0 14 402)
+  | 402 => .compute (.load 1 0 403)
+  | 403 => .program 0 9 8 1 2 706
+  | 719 => .compute (.constant 0 14 720)
+  | 720 => .compute (.load 1 0 721)
+  | 721 => .program 0 9 8 1 2 1024
+  | _ => .compute ((gateDriver 256 gate).code[pc.val])
+
+end Kriterion.ArgoMAC.ArithmeticSimulator

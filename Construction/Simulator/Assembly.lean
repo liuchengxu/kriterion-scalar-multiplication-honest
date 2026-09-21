@@ -20,3 +20,17 @@ def relocate {source target : Nat} (labels : Fin source → Fin target) :
   | .pointAdd target left right next => .pointAdd target left right (labels next)
 
 end Kriterion.ArgoMAC.ArithmeticSimulator
+
+namespace Kriterion.ArgoMAC.ArithmeticSimulator
+open Cryptography.BoundedMachine
+
+/-- The relocation keeps oracle operands fixed. -/
+def relocateSimulator {source target : Nat} (labels : Fin source → Fin target) :
+    SimulatorInstruction source → SimulatorInstruction target
+  | .compute instruction => .compute (relocate labels instruction)
+  | .query kind index input first second next => .query kind index input first second (labels next)
+  | .lookup kind index input first second present next =>
+      .lookup kind index input first second present (labels next)
+  | .program kind index input first second next => .program kind index input first second (labels next)
+
+end Kriterion.ArgoMAC.ArithmeticSimulator

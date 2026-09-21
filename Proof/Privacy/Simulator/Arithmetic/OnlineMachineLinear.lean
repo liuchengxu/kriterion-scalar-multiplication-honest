@@ -378,3 +378,33 @@ theorem onlineMachine_labels (attempts : Nat) :
   simp only [Nat.add_sub_cancel_left]
 
 end Kriterion.ArgoMAC.ArithmeticSimulator
+
+namespace Kriterion.ArgoMAC.ArithmeticSimulator
+open Cryptography.BoundedMachine
+
+/-- Private linear blocks retain their existing arithmetic implementation. -/
+theorem lazyOnlineMachine_linear (program : List LinearInstruction)
+    (labels : Nat → Fin 290305300) (present : ContainsLinear (onlineMachine 256) program labels)
+    (outside : ∀ index, index < program.length →
+      ((labels index).val < 1428193 ∨ 1435659 ≤ (labels index).val) ∧
+      ((labels index).val < 1435662 ∨ 2751382 ≤ (labels index).val) ∧
+      ((labels index).val < 2751388 ∨ 290104636 ≤ (labels index).val)) :
+    ContainsLinear lazyOnlineMachine.arithmetic program labels := by
+  intro index inside
+  rw [lazyOnlineMachine_private (labels index) (outside index inside)]
+  exact present index inside
+
+/-- Blocks before the first oracle call retain their arithmetic code. -/
+theorem lazyOnlineMachine_linearBefore (program : List LinearInstruction) (start length : Nat)
+    (normal : Fin 290305300) (fits : start + length ≤ 290305298)
+    (present : ContainsLinear (onlineMachine 256) program (onlineBodyLabels start length fits normal))
+    (before : start + length ≤ 1428193) (returned : normal.val < 1428193) :
+    ContainsLinear lazyOnlineMachine.arithmetic program (onlineBodyLabels start length fits normal) := by
+  apply lazyOnlineMachine_linear _ _ present
+  intro index inside
+  unfold onlineBodyLabels
+  split <;> (try dsimp only)
+  · exact ⟨Or.inl (by omega), Or.inl (by omega), Or.inl (by omega)⟩
+  · exact ⟨Or.inl returned, Or.inl (by omega), Or.inl (by omega)⟩
+
+end Kriterion.ArgoMAC.ArithmeticSimulator

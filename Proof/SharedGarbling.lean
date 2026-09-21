@@ -80,4 +80,41 @@ theorem packedPerfectCorrectness [FieldCertificate] [GroupCertificate] :
     (fun answers parameter scalar tape input labels =>
       packedCircuit_evaluate answers parameter scalar tape input labels)
 
-end Kriterion.ArgoMAC.Shared
+/-- The unpacked executable interface keeps the Lamport encoding obligation. -/
+def programLamportCompatible [FieldCertificate] [GroupCertificate] :
+    GarbledCircuit.LamportCompatibility programCircuit affineLamportBits where
+  keyPairs := Lamport.keyPairs
+  encodeSelectsLabels := Lamport.selectedLabels_eq
+
+/-- The unpacked executable interface keeps perfect correctness. -/
+theorem programPerfectCorrectness [FieldCertificate] [GroupCertificate] :
+    GarbledCircuit.PerfectCorrectness programCircuit Prod.snd := by
+  intro parameter scalar tape input
+  have correct := perfectCorrectness parameter scalar (replaceOracle tape.1.val tape.2) input
+  simpa [programCircuit, wireCircuit, Lamport.wireCircuit, GarbledCircuit.mapLabels,
+    Garbling.garbledCircuit, Garbling.garble, Garbling.encode, replaceOracle,
+    evaluationOracle, restrict_expand] using correct
+
+/-- The packed executable interface keeps the byte count: its garble transmits
+the packed table, which is what `ciphertextSize` already measures. -/
+theorem packedProgramCiphertextSize [FieldCertificate] [GroupCertificate]
+    (parameter : Nat) (scalar : NonZeroScalar)
+    (tape : PrivateCoins × Cryptography.PublicOracle FixedKeyIndex EncPRF.PermutationIndex) :
+    (Wire.encoding.encode (packedProgramCircuit.garble parameter scalar tape).1).length = 8887896 := by
+  rw [show (packedProgramCircuit.garble parameter scalar tape).1 =
+      Pipeline.Table.pack (programCircuit.garble parameter scalar tape).1 from rfl,
+    show (programCircuit.garble parameter scalar tape).1 =
+      (wireCircuit.garble parameter scalar (replaceOracle tape.1.val tape.2)).1 from rfl]
+  exact ciphertextSize parameter scalar (replaceOracle tape.1.val tape.2)
+
+/-- The packed executable interface keeps the Lamport encoding obligation. -/
+def packedProgramLamportCompatible [FieldCertificate] [GroupCertificate] :
+    GarbledCircuit.LamportCompatibility packedProgramCircuit affineLamportBits :=
+  programLamportCompatible.mapPublic Pipeline.Table.pack Pipeline.PackedTable.unpack
+
+/-- The packed executable interface keeps perfect correctness. -/
+theorem packedProgramPerfectCorrectness [FieldCertificate] [GroupCertificate] :
+    GarbledCircuit.PerfectCorrectness packedProgramCircuit Prod.snd :=
+  programPerfectCorrectness.mapPublic Pipeline.Table.pack Pipeline.PackedTable.unpack
+    (fun answers parameter scalar tape input labels =>
+      packedCircuit_evaluate answers parameter scalar (replaceOracle tape.1.val tape.2) input labels)

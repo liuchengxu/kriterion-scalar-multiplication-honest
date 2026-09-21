@@ -71,3 +71,46 @@ theorem linearMachine_run [BN254.FieldCertificate] (program : List LinearInstruc
   simp [run, step, linearMachine, PMF.pure_map, Nat.add_comm]
 
 end Kriterion.ArgoMAC.ArithmeticSimulator
+
+namespace Kriterion.ArgoMAC.ArithmeticSimulator
+open Cryptography Cryptography.BoundedMachine
+
+/-- The simulator executes each private arithmetic instruction without an oracle change. -/
+theorem simulator_linear_step [BN254.FieldCertificate]
+    {FixedIndex EncIndex : Type} [Fintype FixedIndex] [Fintype EncIndex]
+    [DecidableEq FixedIndex] [DecidableEq EncIndex] (host : Simulator)
+    (instruction : LinearInstruction) (pc next : Fin (host.size + 1)) (memory : Memory)
+    (oracle : LazyOracle.State FixedIndex EncIndex)
+    (selected : host.code[pc.val] = .compute (instruction.emit next)) :
+    host.step ⟨pc, memory⟩ oracle =
+      PMF.pure (some (false, ⟨next, instruction.execute memory⟩, oracle)) := by
+  cases instruction <;> simp [Simulator.step, selected, Simulator.arithmetic, step,
+    LinearInstruction.emit, LinearInstruction.execute, PMF.pure_map]
+
+/-- The simulator retains the exact private block charge and the same oracle state. -/
+theorem simulator_linear_continue [BN254.FieldCertificate]
+    {FixedIndex EncIndex : Type} [Fintype FixedIndex] [Fintype EncIndex]
+    [DecidableEq FixedIndex] [DecidableEq EncIndex] (host : Simulator)
+    (program : List LinearInstruction) (labels : Nat → Fin (host.size + 1))
+    (present : ∀ index (valid : index < program.length),
+      host.code[(labels index).val] = .compute ((program[index]).emit (labels (index + 1))))
+    (memory : Memory) (oracle : LazyOracle.State FixedIndex EncIndex) (fuel : Nat) :
+    host.run (program.length + fuel) ⟨labels 0, memory⟩ oracle =
+      (host.run fuel ⟨labels program.length, executeLinear program memory⟩ oracle).map
+        (Option.map fun result => (result.1, result.2.1, result.2.2 + program.length)) := by
+  induction program generalizing labels memory with
+  | nil => simp [executeLinear, PMF.map_id]
+  | cons instruction rest ih =>
+      have first := present 0 (by simp)
+      have tail : ∀ index (valid : index < rest.length),
+          host.code[(labels (index + 1)).val] =
+            .compute ((rest[index]).emit (labels (index + 1 + 1))) := by
+        intro index valid
+        exact present (index + 1) (by simpa using Nat.succ_lt_succ valid)
+      rw [List.length_cons, Nat.succ_add, Simulator.run]
+      rw [simulator_linear_step host instruction (labels 0) (labels 1) memory oracle (by simpa using first)]
+      simp only [PMF.pure_bind]
+      rw [ih (fun index => labels (index + 1)) tail]
+      simp [executeLinear, PMF.map_comp, Option.map_map, Function.comp_def, Nat.add_assoc]
+
+end Kriterion.ArgoMAC.ArithmeticSimulator

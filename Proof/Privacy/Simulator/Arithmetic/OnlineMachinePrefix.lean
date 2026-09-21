@@ -70,3 +70,61 @@ theorem onlineMachine_prefix [BN254.FieldCertificate] (attempts : Nat) (memory :
       (originalSetup.trans _ _ _ _ _ _ _ _ _ (originalStore.trans _ _ _ _ _ _ _ _ _ curve)))
 
 end Kriterion.ArgoMAC.ArithmeticSimulator
+
+namespace Kriterion.ArgoMAC.ArithmeticSimulator
+open Cryptography.BoundedMachine GarbledCircuit.SimulatorProtocol
+
+/-- The simulator computes the private request prefix with the existing instruction charge. -/
+theorem lazyOnlineMachine_prefix [BN254.FieldCertificate] (memory : Memory)
+    (input : BN254.AffineInput) (output : Option BN254.Point) (rest : List Bool)
+    (wire : memory.bits 0 = affine input ++ GarbledCircuit.SimulatorProtocol.output output ++ rest) :
+    FixedContinuation lazyOnlineMachine.arithmetic 0 13618 memory
+      (onlineCurveMemory memory input output rest) (onlinePrefixCost output) := by
+  have setup : FixedContinuation lazyOnlineMachine.arithmetic 0 1 memory (onlineInputPrepared memory) 1 := by
+    intro fuel
+    exact linear_continue lazyOnlineMachine.arithmetic onlineInputSetup
+      (onlineBodyLabels 0 1 (by decide) 1) (lazyOnlineMachine_linearBefore _ _ _ _ _ (onlineMachine_inputSetup 256) (by decide) (by decide)) memory fuel
+  have read : FixedContinuation lazyOnlineMachine.arithmetic 1 98 (onlineInputPrepared memory)
+      (onlineReadMemory memory input output rest) (onlineInputCost output - 1) := by
+    intro fuel
+    exact onlineInputHost_continue lazyOnlineMachine.arithmetic
+      (fun pc => onlineBodyLabels 1 97 (by decide) 98 pc.val) lazyOnlineMachine_input
+      (onlineInputPrepared memory) input output rest fuel wire
+  have originalSetup : FixedContinuation lazyOnlineMachine.arithmetic 98 101
+      (onlineReadMemory memory input output rest)
+      (executeLinear onlineOriginalSetup (onlineReadMemory memory input output rest)) 3 := by
+    intro fuel
+    exact linear_continue lazyOnlineMachine.arithmetic onlineOriginalSetup
+      (onlineBodyLabels 98 3 (by decide) 101) (lazyOnlineMachine_linearBefore _ _ _ _ _ (onlineMachine_originalSetup 256) (by decide) (by decide))
+      (onlineReadMemory memory input output rest) fuel
+  have originalStore : FixedContinuation lazyOnlineMachine.arithmetic 101 7213
+      (executeLinear onlineOriginalSetup (onlineReadMemory memory input output rest))
+      (onlineOriginalMemory memory input output rest) 7112 := by
+    intro fuel
+    exact selectedLabelStoreHost_continue lazyOnlineMachine.arithmetic
+      (onlineBodyLabels 101 7112 (by decide) 7213) (lazyOnlineMachine_linearBefore _ _ _ _ _ (onlineMachine_originalStore 256) (by decide) (by decide))
+      (executeLinear onlineOriginalSetup (onlineReadMemory memory input output rest)) fuel
+  have curve : FixedContinuation lazyOnlineMachine.arithmetic 7213 13618
+      (onlineOriginalMemory memory input output rest) (onlineCurveMemory memory input output rest) 6405 := by
+    intro fuel
+    exact retargetCurveHost_continue lazyOnlineMachine.arithmetic
+      (onlineBodyLabels 7213 6405 (by decide) 13618) (lazyOnlineMachine_linearBefore _ _ _ _ _ (onlineMachine_curveRetarget 256) (by decide) (by decide))
+      (onlineOriginalMemory memory input output rest) fuel
+  exact setup.trans _ _ _ _ _ _ _ _ _
+    (read.trans _ _ _ _ _ _ _ _ _
+      (originalSetup.trans _ _ _ _ _ _ _ _ _ (originalStore.trans _ _ _ _ _ _ _ _ _ curve)))
+
+
+
+/-- The private request prefix leaves the fixed oracle state unchanged. -/
+theorem lazyOnlineMachine_prefix_run [BN254.FieldCertificate] (memory : Memory)
+    (input : BN254.AffineInput) (output : Option BN254.Point) (rest : List Bool)
+    (wire : memory.bits 0 = affine input ++ GarbledCircuit.SimulatorProtocol.output output ++ rest)
+    (oracle : Cryptography.LazyOracle.State Shared.FixedKeyIndex EncPRF.PermutationIndex) (fuel : Nat) :
+    lazyOnlineMachine.run (onlinePrefixCost output + fuel) ⟨0, memory⟩ oracle =
+      (lazyOnlineMachine.run fuel ⟨13618, onlineCurveMemory memory input output rest⟩ oracle).map
+        (Option.map fun result => (result.1, result.2.1, result.2.2 + onlinePrefixCost output)) :=
+  Simulator.run_prefix lazyOnlineMachine _ fuel _ _ oracle
+    (lazyOnlineMachine_prefix memory input output rest wire fuel)
+
+end Kriterion.ArgoMAC.ArithmeticSimulator

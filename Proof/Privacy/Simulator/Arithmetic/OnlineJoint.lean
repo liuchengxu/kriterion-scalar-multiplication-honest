@@ -2,12 +2,21 @@ import Proof.Privacy.Simulator.Arithmetic.GateDirectiveSchedule
 import Proof.Privacy.Simulator.Arithmetic.GateTypedData
 import Proof.Privacy.Simulator.Arithmetic.OnlineSamplingSourceJoint
 import Proof.Privacy.Simulator.Arithmetic.EncLinkCompleteMemory
-import Proof.Privacy.Simulator.Arithmetic.CompiledOnlineProtocol
+import Proof.Privacy.Simulator.Arithmetic.OnlineMachineValid
+import Proof.Privacy.Simulator.Arithmetic.OnlineMachineNull
 import Proof.Privacy.Simulator.Arithmetic.SharedExactSourceGame
 
 namespace Kriterion.ArgoMAC.ArithmeticSimulator
 open BN254 Cryptography Cryptography.BoundedMachine Security Security.SharedSimulatorMachine
 noncomputable section
+
+/-- The absent-output source includes the common prefix and all curve gates. -/
+def compiledOnlineNullSamples [FieldCertificate] (attempts : Nat) (memory : Memory)
+    (input : AffineInput) (suffix : List Bool) : PMF (Configuration 290305300 × Nat) :=
+  ((((gateLoopSamples curveGatePlan attempts 1270 0
+    (onlineNullGateInitial (onlineCurveMemory memory input none suffix))).map onlineNullGateResult).map
+      fun result => (result.1, result.2 + 6)).map
+        fun result => (result.1, result.2 + onlinePrefixCost none))
 
 abbrev OnlineJointMemoryResult := Garbling.Labels × (Memory × Nat) × SharedOracleSource
 
@@ -17,7 +26,7 @@ def onlineCurveJoint (attempts : Nat) (request : CurveGateRequest) (input : Affi
   gateLoopCoupled curveGatePlan (fun gate => sharedDirectiveSlot (curveDirectiveAt request input mac gate))
     attempts 1270 0 memory state
 
-/-- The point joint uses all 92 rows in the compiler's descriptor order. -/
+/-- The point joint uses all 91 rows in the compiler's descriptor order. -/
 def onlinePointJoint (attempts : Nat) (requests : PointGateRequests) (input : AffineInput) (mac : InputMac)
     (memory : Memory) (state : SharedOracleSource) : PMF (Option GateLoopJointResult) :=
   gateLoopCoupled pointGatePlan (fun gate => sharedDirectiveSlot (pointDirectiveAt requests input mac gate))
@@ -67,14 +76,6 @@ def onlineMemoryJoint [FieldCertificate] [GroupCertificate] (attempts : Nat)
   | none => onlineNullMemoryJoint attempts (sharedOfflineFrame coin) input memory state
   | some point => onlineValidMemoryJoint attempts (sharedOfflineFrame coin) input point coin.2.2 memory state
 
-/-- The protocol joint charges the dispatcher and retains the source state for the decision phase. -/
-def compiledOnlineJoint [FieldCertificate] [GroupCertificate] (attempts : Nat)
-    (coin : SimulatorSampling.OfflineCoin) (input : AffineInput) (output : Option Point)
-    (state : State) (source : SharedOracleSource) : PMF (Option (Garbling.Labels × State × SharedOracleSource)) :=
-  let memory := compiledOnlineMemory state.memory
-    (GarbledCircuit.SimulatorProtocol.affine input ++ GarbledCircuit.SimulatorProtocol.output output)
-  (onlineMemoryJoint attempts coin input output memory source).map (Option.map fun result =>
-    (result.1, (⟨result.2.1.1, state.spent + (result.2.1.2 + 2), state.queries⟩ : State), result.2.2))
 
 end
 end Kriterion.ArgoMAC.ArithmeticSimulator

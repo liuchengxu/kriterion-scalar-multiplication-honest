@@ -21,3 +21,18 @@ def gateLoop {count : Nat} (plan : Vector GateCode count) (attempts : Nat)
     else .halt), fits⟩
 
 end Kriterion.ArgoMAC.ArithmeticSimulator
+
+namespace Kriterion.ArgoMAC.ArithmeticSimulator
+open Cryptography.BoundedMachine
+
+/-- Each gate uses the fixed oracle and retains the arithmetic schedule. -/
+def lazyGateLoopCode {count : Nat} (plan : Vector GateCode count) :
+    Vector (SimulatorInstruction (1036 * count + 2)) (1036 * count + 2) :=
+  Vector.ofFn fun pc =>
+    if inside : pc.val < 1036 * count then
+      let index : Fin count := ⟨pc.val / 1036, by omega⟩
+      relocateSimulator (gateLoopLabels index)
+        (lazyGateInstruction plan[index] ⟨pc.val % 1036, by omega⟩)
+    else .compute .halt
+
+end Kriterion.ArgoMAC.ArithmeticSimulator

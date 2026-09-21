@@ -74,4 +74,57 @@ theorem shared_slots (oracle : PermutationOracle FixedKeyIndex Block)
 /-- The public slot type has the paper's cardinality. -/
 theorem slot_count : Fintype.card (Fin 3) = 3 := rfl
 
+/-- Private coins do not contain random public oracle tables. -/
+def emptyOracle : PublicOracle FixedKeyIndex EncPRF.PermutationIndex :=
+  (⟨fun _ => Equiv.refl Block⟩, ⟨fun _ => Equiv.refl Block⟩, fun _ => (0, 0))
+
+def replaceOracle (tape : Randomness)
+    (oracle : PublicOracle FixedKeyIndex EncPRF.PermutationIndex) : Randomness :=
+  ⟨{tape.val with
+      fixedKeyOracle := expandOracle oracle.1
+      encPRFOracle := oracle.2.1
+      hashOracle := oracle.2.2}, by simp⟩
+
+abbrev PrivateCoins := {tape : Randomness // replaceOracle tape emptyOracle = tape}
+
+def privateCoins (tape : Randomness) : PrivateCoins :=
+  ⟨replaceOracle tape emptyOracle, rfl⟩
+
+def splitCoins : Randomness ≃ PrivateCoins × PublicOracle FixedKeyIndex EncPRF.PermutationIndex where
+  toFun tape := (privateCoins tape, evaluationOracle tape)
+  invFun pair := replaceOracle pair.1.val pair.2
+  left_inv tape := by
+    apply Subtype.ext
+    dsimp [replaceOracle, privateCoins, evaluationOracle]
+    rw [tape.property]
+  right_inv pair := by
+    rcases pair with ⟨⟨tape, equal⟩, ⟨fixed, enc, hash⟩⟩
+    apply Prod.ext
+    · apply Subtype.ext
+      exact equal
+    · simp [evaluationOracle, replaceOracle, restrict_expand]
+
+/-- The executable interface keeps only the input labels in the encoding key. -/
+def programCircuit [FieldCertificate] [GroupCertificate] :
+    GarbledCircuit NonZeroScalar AffineInput (Option Point)
+      (PrivateCoins × PublicOracle FixedKeyIndex EncPRF.PermutationIndex)
+      Pipeline.Table InputMacKey GarbledCircuit.LamportSignature
+      (PublicOracle FixedKeyIndex EncPRF.PermutationIndex) where
+  function := wireCircuit.function
+  garble parameter scalar tape :=
+    ((wireCircuit.garble parameter scalar (replaceOracle tape.1.val tape.2)).1,
+      tape.1.val.val.inputMacKey)
+  encode key input := Lamport.selectedLabels (key.encode (BitInput.ofAffine input))
+  evaluate := wireCircuit.evaluate
+
+/-- The transmitted form of the executable interface. The garbler publishes the
+packed table; the evaluator restores the removed pad bits, which it recomputes
+from the public oracle anyway. -/
+def packedProgramCircuit [FieldCertificate] [GroupCertificate] :
+    GarbledCircuit NonZeroScalar AffineInput (Option Point)
+      (PrivateCoins × PublicOracle FixedKeyIndex EncPRF.PermutationIndex)
+      Pipeline.PackedTable InputMacKey GarbledCircuit.LamportSignature
+      (PublicOracle FixedKeyIndex EncPRF.PermutationIndex) :=
+  programCircuit.mapPublic Pipeline.Table.pack Pipeline.PackedTable.unpack
+
 end Kriterion.ArgoMAC.Shared

@@ -113,3 +113,47 @@ theorem gateDriverCoupled_caller [BN254.FieldCertificate] (attempts limit : Nat)
 
 end
 end Kriterion.ArgoMAC.ArithmeticSimulator
+
+namespace Kriterion.ArgoMAC.ArithmeticSimulator
+open Cryptography Cryptography.BoundedMachine
+
+/-- The gate retains private RAM and restores the saved caller registers. -/
+theorem lazyGateDriverResult_memory (gate : GateCode) (memory : Memory)
+    (oracle : LazyOracle.State Shared.FixedKeyIndex EncPRF.PermutationIndex) (result)
+    (success : lazyGateDriverResult gate memory oracle = some result) :
+    (∀ address : Word, address ≠ 14 → result.1.ram address = (gateDriverPrepared gate memory).ram address) ∧
+    GateCallerRestored result.1 := by
+  unfold lazyGateDriverResult at success
+  dsimp only [Bind.bind] at success
+  obtain ⟨first, firstEq, second, secondEq, success⟩ :=
+    (by simpa only [Option.bind_eq_some_iff] using success)
+  have firstSaved := lazyGateSlot_scratch firstEq
+  have secondSaved := lazyGateSlot_scratch secondEq
+  split at success
+  · obtain ⟨third, thirdEq, success⟩ := Option.bind_eq_some_iff.mp success
+    cases success
+    have thirdSaved := lazyGateSlot_scratch thirdEq
+    refine ⟨fun address outside => (thirdSaved address outside).trans
+      ((secondSaved address outside).trans (firstSaved address outside)), ?_⟩
+    exact gateDirectiveRestore_values third.1
+  · cases success
+    refine ⟨fun address outside => (secondSaved address outside).trans (firstSaved address outside), ?_⟩
+    exact gateDirectiveRestore_values (executeLinear gateDriverTest second.1)
+
+/-- The gate preserves its five caller registers. -/
+theorem lazyGateDriverResult_caller (gate : GateCode) (memory : Memory)
+    (oracle : LazyOracle.State Shared.FixedKeyIndex EncPRF.PermutationIndex) (result)
+    (success : lazyGateDriverResult gate memory oracle = some result) :
+    result.1.registers 11 = memory.registers 11 ∧ result.1.registers 12 = memory.registers 12 ∧
+    result.1.registers 13 = memory.registers 13 ∧ result.1.registers 14 = memory.registers 14 ∧
+    result.1.registers 15 = memory.registers 15 := by
+  have retained := lazyGateDriverResult_memory gate memory oracle result success
+  have saved := gateDriverPrepared_caller gate memory
+  exact ⟨retained.2.1.trans ((retained.1 21 (by decide)).trans saved.1),
+    retained.2.2.1.trans ((retained.1 22 (by decide)).trans saved.2.1),
+    retained.2.2.2.1.trans ((retained.1 23 (by decide)).trans saved.2.2.1),
+    retained.2.2.2.2.1.trans ((retained.1 24 (by decide)).trans saved.2.2.2.1),
+    retained.2.2.2.2.2.trans ((retained.1 25 (by decide)).trans saved.2.2.2.2)⟩
+
+
+end Kriterion.ArgoMAC.ArithmeticSimulator

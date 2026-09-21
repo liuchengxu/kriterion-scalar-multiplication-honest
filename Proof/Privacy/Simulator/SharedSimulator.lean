@@ -194,12 +194,6 @@ def initialState (coin : SimulatorSampling.OfflineCoin)
   bridgeKey := coin.2.2
 }
 
-theorem initialState_invariant (coin : SimulatorSampling.OfflineCoin)
-    (oracles : PublicOracle FixedKeyIndex EncPRF.PermutationIndex) :
-    SimulatorInvariant (initialState coin oracles).oracle := by
-  simp [initialState, SimulatorInvariant, PermutationTranscriptMatches,
-    HashTranscriptMatches, DistinctCommitments]
-
 /-- The offline sampler uses the existing private coin sampler and three-slot public oracles. -/
 noncomputable def tape (_parameter : Nat) (_topology : Garbling.Topology) : PMF State :=
   letI : Nonempty (PublicOracle FixedKeyIndex EncPRF.PermutationIndex) :=
@@ -224,50 +218,6 @@ noncomputable def simulator [FieldCertificate] [GroupCertificate] :
             (state.labels input, {state with oracle := program state.oracle schedule})
 }
 
-/-- The shared simulator preserves every public answer across both phases. -/
-theorem oracleSimulation [FieldCertificate] [GroupCertificate] :
-    GarbledCircuit.OracleSimulation simulator circuitSimulatorOracleHandler
-      CircuitSimulatorState.view := by
-  refine ⟨fun state => SimulatorInvariant state.oracle, fun state query => state.oracle.seen query,
-    ?_, ?_, ?_⟩
-  · intro parameter topology result member
-    dsimp only [simulator] at member
-    rw [PMF.support_map] at member
-    obtain ⟨state, stateMember, rfl⟩ := member
-    simp only [tape, PMF.mem_support_bind_iff, PMF.support_map, Set.mem_image] at stateMember
-    obtain ⟨oracles, _, coin, _, rfl⟩ := stateMember
-    exact initialState_invariant coin oracles
-  · intro query state valid
-    refine ⟨by cases query <;> rfl, by cases query <;> rfl,
-      idealOracleHandler_preservesInvariant query state.oracle valid, ?_, ?_⟩
-    · cases query <;> simp [SimulatorState.seen, circuitSimulatorOracleHandler,
-        idealOracleHandler, oracleHandlerFor, recordFixed, recordEnc, recordHash]
-    · intro prior seen
-      apply SimulatorState.seen_mono (query := prior) ?_ seen
-      cases query <;> simp [circuitSimulatorOracleHandler, idealOracleHandler,
-        oracleHandlerFor, recordFixed, recordEnc, recordHash]
-  · intro state input output result valid member
-    have programmed (schedule : List GateDirective) :
-        let next := {state with oracle := program state.oracle schedule}
-        SimulatorInvariant next.oracle ∧ ∀ query, state.oracle.seen query →
-          next.oracle.seen query ∧ publicAnswer next.view query = publicAnswer state.view query := by
-      have nextValid := commands_invariant state.oracle (scheduleCommands schedule) valid
-      have records := commands_records state.oracle (scheduleCommands schedule)
-      have other := commands_other state.oracle (scheduleCommands schedule)
-      refine ⟨nextValid, fun query seen => ⟨SimulatorState.seen_mono records query seen, ?_⟩⟩
-      exact CircuitSimulatorState.answer_preserved valid nextValid records other.1 other.2 query seen
-    cases output with
-    | none =>
-        dsimp only [simulator] at member
-        have equal := (PMF.mem_support_pure_iff _ _).mp member
-        subst result
-        exact programmed _
-    | some point =>
-        dsimp only [simulator] at member
-        rw [PMF.support_map] at member
-        obtain ⟨sample, _, rfl⟩ := member
-        exact programmed _
-
 /-- The wire simulator sends exactly the selected Lamport blocks. -/
 noncomputable def wireSimulator [FieldCertificate] [GroupCertificate] :=
   simulator.mapLabels (fun labels => Lamport.selectedLabels labels.inputMac)
@@ -277,9 +227,5 @@ noncomputable def wireSimulator [FieldCertificate] [GroupCertificate] :=
 table the machine's ciphertext encodes. -/
 noncomputable def packedWireSimulator [FieldCertificate] [GroupCertificate] :=
   wireSimulator.mapPublic Pipeline.Table.pack
-
-theorem wire_oracleSimulation [FieldCertificate] [GroupCertificate] :
-    GarbledCircuit.OracleSimulation wireSimulator circuitSimulatorOracleHandler
-      CircuitSimulatorState.view := oracleSimulation.mapLabels _ _
 
 end Kriterion.ArgoMAC.Shared.Simulator

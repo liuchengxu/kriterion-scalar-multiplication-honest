@@ -72,3 +72,20 @@ noncomputable def encLink (attempts : Nat) : Machine := ⟨7467, Vector.ofFn (fu
     | _ => .halt), by decide⟩
 
 end Kriterion.ArgoMAC.ArithmeticSimulator
+
+namespace Kriterion.ArgoMAC.ArithmeticSimulator
+open Cryptography.BoundedMachine
+
+/-- The fixed oracle supplies the hash and encryption replies. -/
+noncomputable def lazyEncLinkInstruction (pc : Fin 7468) : SimulatorInstruction 7468 :=
+  match pc.val with
+  | 15 => .query 4 9 8 1 2 16
+  | 16 => .compute (.constant 3 128 17)
+  | 17 => .compute (.arithmetic .shiftLeft 8 1 3 18)
+  | 18 => .compute (.arithmetic .xor 8 8 2 88)
+  | 7239 => .compute (.constant 3 15240 7240)
+  | 7240 => .compute (.arithmetic .sub 9 9 3 7241)
+  | 7241 => .query 2 9 8 8 7 7436
+  | _ => .compute ((encLink 256).code[pc.val])
+
+end Kriterion.ArgoMAC.ArithmeticSimulator

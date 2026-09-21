@@ -110,6 +110,34 @@ theorem hCoefficient_event_of_sourceGoodMass {Source Transcript : Type*}
     (sourceGoodMass_le samples kernel bad) _ ratio event
   rwa [sourceGoodMass_missing]
 
+/-- A different continuation on the same bad event keeps the same error bound. -/
+theorem hCoefficient_event_of_sourceGoodMass_congr {Source Transcript : Type*}
+    (real : PMF Transcript) (samples : PMF Source) (kernel replacement : Source → PMF Transcript)
+    (bad : Set Source) (error : ENNReal) (errorFinite : error ≠ ⊤)
+    (badBound : ℝ) (badMass : (samples.toOuterMeasure bad).toReal ≤ badBound)
+    (ratio : ∀ t, (1 - error) * sourceGoodMass samples kernel bad t ≤ real t)
+    (agree : ∀ source ∈ samples.support, source ∉ bad → replacement source = kernel source)
+    (event : Set Transcript) :
+    |(real.toOuterMeasure event).toReal - ((samples.bind replacement).toOuterMeasure event).toReal| ≤
+      badBound + error.toReal := by
+  apply hCoefficient_event_of_sourceGoodMass real samples replacement bad error errorFinite
+    badBound badMass _ event
+  intro transcript
+  have same : sourceGoodMass samples replacement bad transcript =
+      sourceGoodMass samples kernel bad transcript := by
+    classical
+    unfold sourceGoodMass
+    apply tsum_congr
+    intro source
+    by_cases supported : source ∈ samples.support
+    · by_cases failed : source ∈ bad
+      · simp [failed]
+      · simp [failed, agree source supported failed]
+    · have zero : samples source = 0 := by simpa only [PMF.mem_support_iff, not_not] using supported
+      simp [zero]
+  rw [same]
+  exact ratio transcript
+
 end
 
 end Kriterion.ArgoMAC.Security

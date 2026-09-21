@@ -289,18 +289,6 @@ def simulatorStateTape
 noncomputable def concreteCircuitSimulator [FieldCertificate] [GroupCertificate] :=
   circuitSimulator simulatorStateTape
 
-/-- The concrete simulator satisfies the challenge's oracle-state rules. -/
-theorem concreteCircuitSimulator_rules [FieldCertificate] [GroupCertificate] :
-    GarbledCircuit.OracleSimulation concreteCircuitSimulator circuitSimulatorOracleHandler
-      CircuitSimulatorState.view := by
-  apply circuitSimulator_oracleSimulation
-  intro parameter topology state member
-  dsimp only [simulatorStateTape] at member
-  rw [PMF.support_map] at member
-  obtain ⟨coin, _, rfl⟩ := member
-  simp [SimulatorCoin.state, SimulatorInvariant, PermutationTranscriptMatches,
-    HashTranscriptMatches, DistinctCommitments]
-
 end
 
 end Kriterion.ArgoMAC.Security

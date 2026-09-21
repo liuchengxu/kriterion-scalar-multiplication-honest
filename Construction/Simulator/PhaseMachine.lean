@@ -41,4 +41,37 @@ def phaseMachine (setup online query : Machine)
         (query.code[pc.val - (5 + setup.size + online.size)]'(by unfold phaseMachineSize at external; omega))
     else .halt), fits⟩
 
+/-- The table contains two dispatch instructions, both phase bodies, and one rejection halt. -/
+def phaseSimulatorSize (setup : Machine) (online : Simulator) : Nat := setup.size + online.size + 4
+
+def phaseSimulatorSetup (setup : Machine) (online : Simulator) (pc : Fin (setup.size + 1)) :
+    Fin (phaseSimulatorSize setup online + 1) := ⟨2 + pc.val, by
+  have := pc.isLt; unfold phaseSimulatorSize; omega⟩
+
+def phaseSimulatorOnline (setup : Machine) (online : Simulator) (pc : Fin (online.size + 1)) :
+    Fin (phaseSimulatorSize setup online + 1) := ⟨3 + setup.size + pc.val, by
+  have := pc.isLt; unfold phaseSimulatorSize; omega⟩
+
+/-- The two protocol bits select setup or encoding. The machine rejects public-query requests. -/
+def phaseSimulator (setup : Machine) (online : Simulator) (setupFuel : Nat)
+    (within : phaseSimulatorSize setup online + 1 + (2 + setupFuel) + (2 + online.secondFuel) ≤ 2 ^ 60) :
+    Simulator where
+  size := phaseSimulatorSize setup online
+  code := Vector.ofFn fun pc =>
+    let rejected : Fin (phaseSimulatorSize setup online + 1) := ⟨phaseSimulatorSize setup online, Nat.lt_succ_self _⟩
+    if first : pc.val = 0 then
+      .compute (.pop 0 rejected ⟨1, by unfold phaseSimulatorSize; omega⟩ rejected)
+    else if second : pc.val = 1 then
+      .compute (.pop 0 rejected (phaseSimulatorSetup setup online 0) (phaseSimulatorOnline setup online 0))
+    else if offline : pc.val < 3 + setup.size then
+      .compute (relocate (phaseSimulatorSetup setup online) (setup.code[pc.val - 2]'(by omega)))
+    else if encoding : pc.val < phaseSimulatorSize setup online then
+      relocateSimulator (phaseSimulatorOnline setup online)
+        (online.code[pc.val - (3 + setup.size)]'(by unfold phaseSimulatorSize at encoding; omega))
+    else .compute .halt
+  addressBound := by omega
+  firstFuel := 2 + setupFuel
+  secondFuel := 2 + online.secondFuel
+  within := within
+
 end Kriterion.ArgoMAC.ArithmeticSimulator

@@ -67,5 +67,89 @@ theorem gateLoopCoupledReady_typed [BN254.FieldCertificate] {count : Nat}
   exact sharedDirectiveSlot_prepared _ current (directives gate) (quotients gate) exactData.bit exactData.tweak
     exactData.indices exactData.target exactData.quotientWord exactData.table exactData.label exactData.lift
 
+/-- A typed strict gate programs exactly its source directive. -/
+theorem lazyGateDriverResult_directive (gate : GateCode) (memory : Memory)
+    (directive : GateDirective) (quotient : HashLiftQuotient)
+    (oracle : LazyOracle.State Shared.FixedKeyIndex EncPRF.PermutationIndex)
+    (data : GateTypedData memory gate directive quotient) :
+    (lazyGateDriverResult gate memory oracle).map (fun result => result.2.1) =
+      OperationalOracle.strictCommands oracle (directive.commands.map sharedCommand) := by
+  have prepared := sharedDirectiveSlot_prepared gate memory directive quotient data.bit data.tweak
+    data.indices data.target data.quotientWord data.table data.label data.lift
+  rw [← sharedDirectiveSlot_list]
+  exact lazyGateDriverResult_oracle gate memory (sharedDirectiveSlot directive) (!directive.bit)
+    oracle prepared.2 prepared.1
+
+/-- The strict loop follows the exact ordered source commands. -/
+theorem lazyGateLoopResults_source {count : Nat} (plan : Vector GateCode count)
+    (directives : Fin count → GateDirective) (quotients : Fin count → HashLiftQuotient)
+    (remaining index : Nat) (memory initial : Memory)
+    (oracle : LazyOracle.State Shared.FixedKeyIndex EncPRF.PermutationIndex)
+    (inside : index + remaining ≤ count) (agreement : GatePrivateAgreement memory initial)
+    (data : ∀ gate : Fin count, GateTypedData initial plan[gate.val] (directives gate) (quotients gate))
+    (bounds : ∀ gate : Fin count, GatePrivateAddresses initial plan[gate.val]) :
+    (lazyGateLoopResults plan remaining index memory oracle).map (fun result => result.2.1) =
+      OperationalOracle.strictCommands oracle
+        (gateLoopCommandList (fun gate => sharedDirectiveSlot (directives gate))
+          (fun gate => !(directives gate).bit) remaining index) := by
+  induction remaining generalizing index memory oracle with
+  | zero => simp [lazyGateLoopResults, gateLoopCommandList, OperationalOracle.strictCommands]
+  | succ remaining ih =>
+    have here : index < count := by omega
+    let selected : Fin count := ⟨index, here⟩
+    have typed := GateTypedData.ofAgreement agreement plan[index] (directives selected)
+      (quotients selected) (data selected) (bounds selected)
+    have prepared := sharedDirectiveSlot_prepared plan[index] memory (directives selected)
+      (quotients selected) typed.bit typed.tweak typed.indices typed.target typed.quotientWord
+      typed.table typed.label typed.lift
+    have source := lazyGateDriverResult_oracle plan[index] memory
+      (sharedDirectiveSlot (directives selected)) (!(directives selected).bit) oracle prepared.2 prepared.1
+    simp only [lazyGateLoopResults, gateLoopCommandList, dif_pos here, OperationalOracle.strictCommands_append]
+    dsimp only [Bind.bind]
+    cases reached : lazyGateDriverResult plan[index] memory oracle with
+    | none =>
+      have failed : OperationalOracle.strictCommands oracle
+          (sharedGateCommandList (sharedDirectiveSlot (directives selected)) (!(directives selected).bit)) = none := by
+        simpa [reached] using source.symm
+      simp [failed, selected]
+    | some head =>
+      have successful : OperationalOracle.strictCommands oracle
+          (sharedGateCommandList (sharedDirectiveSlot (directives selected)) (!(directives selected).bit)) = some head.2.1 := by
+        simpa [reached] using source.symm
+      simp only [Option.bind_some, Option.map_bind, Option.map_some, Function.comp_def]
+      rw [show OperationalOracle.strictCommands oracle
+        (sharedGateCommandList (sharedDirectiveSlot (directives ⟨index, here⟩)) (!(directives ⟨index, here⟩).bit)) = some head.2.1 from successful]
+      simp only [Option.bind_some]
+      change (lazyGateLoopResults plan remaining (index + 1) head.1 head.2.1).bind
+        (some ∘ (fun result => result.2.1)) = _
+      rw [← Option.map_eq_bind]
+      exact ih (index + 1) head.1 head.2.1 (by omega)
+        (GatePrivateAgreement.afterLazyGate plan[index] memory initial oracle agreement head reached) data bounds
+
+theorem GatePrivateAgreement.afterLazyLoop {count : Nat} (plan : Vector GateCode count)
+    (remaining index : Nat) (memory initial : Memory)
+    (oracle : LazyOracle.State Shared.FixedKeyIndex EncPRF.PermutationIndex)
+    (agreement : GatePrivateAgreement memory initial) (result)
+    (success : lazyGateLoopResults plan remaining index memory oracle = some result) :
+    GatePrivateAgreement result.1 initial := by
+  induction remaining generalizing index memory oracle result with
+  | zero =>
+    simp only [lazyGateLoopResults, Option.some.injEq] at success
+    subst result
+    exact agreement
+  | succ remaining ih =>
+    unfold lazyGateLoopResults at success
+    split at success
+    · rename_i inside
+      dsimp only [Bind.bind] at success
+      obtain ⟨head, reached, tail, tailReached, equal⟩ :=
+        (by simpa only [Option.bind_eq_some_iff] using success)
+      cases equal
+      exact ih (index + 1) head.1 head.2.1
+        (GatePrivateAgreement.afterLazyGate plan[index] memory initial oracle agreement head reached)
+        tail tailReached
+    · contradiction
+
+
 end
 end Kriterion.ArgoMAC.ArithmeticSimulator

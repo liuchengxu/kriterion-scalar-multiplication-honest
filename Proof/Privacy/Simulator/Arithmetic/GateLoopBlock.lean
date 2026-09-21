@@ -77,3 +77,61 @@ theorem gateLoopBlock_continue [BN254.FieldCertificate] {count : Nat} (host : Ma
         rfl
 
 end Kriterion.ArgoMAC.ArithmeticSimulator
+
+namespace Kriterion.ArgoMAC.ArithmeticSimulator
+open Cryptography Cryptography.BoundedMachine
+
+/-- The fixed-oracle loop adds each successful gate cost to its continuation. -/
+theorem lazyGateLoopBlock_continue [BN254.FieldCertificate]
+    {count : Nat} {FixedIndex EncIndex : Type} [Fintype FixedIndex] [Fintype EncIndex]
+    [DecidableEq FixedIndex] [DecidableEq EncIndex] (host : Simulator)
+    (plan : Vector GateCode count) (labels : Fin (1036 * count + 2) → Fin (host.size + 1))
+    (present : ContainsLazyGateLoop host plan labels) (remaining index fuel : Nat)
+    (memory : Memory) (oracle : LazyOracle.State FixedIndex EncIndex)
+    (within : index + remaining ≤ count) :
+    host.run (117 * remaining + fuel) ⟨labels (gateLoopBoundary index (by omega)), memory⟩ oracle =
+      match lazyGateLoopResults plan remaining index memory oracle with
+      | none => PMF.pure none
+      | some result =>
+          (host.run (117 * remaining + fuel - result.2.2)
+            ⟨labels (gateLoopBoundary (index + remaining) within), result.1⟩ result.2.1).map
+            (Option.map fun final => (final.1, final.2.1, final.2.2 + result.2.2)) := by
+  induction remaining generalizing index fuel memory oracle with
+  | zero =>
+      simp only [lazyGateLoopResults, Nat.mul_zero, Nat.zero_add, Nat.add_zero, Nat.sub_zero]
+      rw [show (Option.map fun final : Configuration (host.size + 1) × LazyOracle.State FixedIndex EncIndex × Nat =>
+        (final.1, final.2.1, final.2.2)) = id from by funext value; cases value <;> rfl, PMF.map_id]
+  | succ remaining ih =>
+      have inside : index < count := by omega
+      let selected : Fin count := ⟨index, inside⟩
+      have executed := lazyGateDriverBlock_continue host plan[selected]
+        (labels ∘ gateLoopLabels selected) (lazyGateLoopBlock_contains host plan labels present selected)
+        memory oracle (117 * remaining + fuel)
+      have entry : gateLoopLabels selected 0 = gateLoopBoundary index (by omega) := rfl
+      change host.run _ ⟨labels (gateLoopLabels selected 0), memory⟩ oracle = _ at executed
+      rw [entry, show 117 + (117 * remaining + fuel) = 117 * (remaining + 1) + fuel by omega] at executed
+      rw [executed]
+      simp only [lazyGateLoopResults, dif_pos inside]
+      cases first : lazyGateDriverResult plan[selected] memory oracle with
+      | none => simp [first, selected]
+      | some head =>
+          have bound := lazyGateDriverResult_cost plan[selected] memory oracle head first
+          have nextLabel : gateLoopLabels selected 1034 = gateLoopBoundary (index + 1) (by omega) := rfl
+          simp only [first, Option.bind_some]
+          change (host.run _ ⟨labels (gateLoopLabels selected 1034), head.1⟩ head.2.1).map _ = _
+          rw [nextLabel]
+          have amount : 117 * (remaining + 1) + fuel - head.2.2 =
+              117 * remaining + (117 + fuel - head.2.2) := by omega
+          rw [amount, ih (index + 1) (117 + fuel - head.2.2) head.1 head.2.1 (by omega)]
+          cases rest : lazyGateLoopResults plan remaining (index + 1) head.1 head.2.1 with
+          | none => simp [rest, PMF.pure_map]
+          | some tail =>
+              simp only [rest, Option.bind_some, Option.pure_def]
+              have remainingFuel : 117 * remaining + (117 + fuel - head.2.2) - tail.2.2 =
+                  117 * (remaining + 1) + fuel - (head.2.2 + tail.2.2) := by omega
+              have returnLabel : gateLoopBoundary (index + 1 + remaining) (by omega) =
+                  gateLoopBoundary (index + (remaining + 1)) within := by apply Fin.ext; simp [gateLoopBoundary]; omega
+              rw [remainingFuel, returnLabel]
+              simp [rest, PMF.map_comp, Option.map_map, Function.comp_def, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm]
+
+end Kriterion.ArgoMAC.ArithmeticSimulator

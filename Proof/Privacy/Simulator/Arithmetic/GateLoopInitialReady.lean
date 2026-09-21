@@ -63,4 +63,18 @@ theorem gateLoopCoupledReady_of_initial [BN254.FieldCertificate] {count : Nat}
           source exactCommands.2 (by omega) result supported) retained.1 (by omega) prepared
 
 end
+/-- A strict gate retains all private descriptor data. -/
+theorem GatePrivateAgreement.afterLazyGate (gate : GateCode) (memory initial : Memory)
+    (oracle : LazyOracle.State Shared.FixedKeyIndex EncPRF.PermutationIndex)
+    (agreement : GatePrivateAgreement memory initial) (result)
+    (success : lazyGateDriverResult gate memory oracle = some result) :
+    GatePrivateAgreement result.1 initial := by
+  have caller := lazyGateDriverResult_caller gate memory oracle result success
+  have retained := (lazyGateDriverResult_memory gate memory oracle result success).1
+  refine ⟨caller.1.trans agreement.source, caller.2.1.trans agreement.input,
+    caller.2.2.2.1.trans agreement.labels, ?_⟩
+  intro cell lower upper
+  exact ((retained _ (privateWord_ne cell 14 upper (by decide) (by omega))).trans
+    (gateDriverPrepared_private gate memory cell lower upper)).trans (agreement.words cell lower upper)
+
 end Kriterion.ArgoMAC.ArithmeticSimulator

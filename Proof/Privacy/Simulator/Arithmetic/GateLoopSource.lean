@@ -62,3 +62,51 @@ theorem gateLoopSamples_cost [BN254.FieldCertificate] {count : Nat} (plan : Vect
       · simp only [GateLoopReady, dif_neg inside] at ready
 
 end Kriterion.ArgoMAC.ArithmeticSimulator
+
+namespace Kriterion.ArgoMAC.ArithmeticSimulator
+open Cryptography Cryptography.BoundedMachine
+
+/-- The loop stops at the first refused program and sums the successful gate costs. -/
+noncomputable def lazyGateLoopResults {count : Nat} {FixedIndex EncIndex : Type}
+    [Fintype FixedIndex] [Fintype EncIndex] [DecidableEq FixedIndex] [DecidableEq EncIndex]
+    (plan : Vector GateCode count) :
+    Nat → Nat → Memory → LazyOracle.State FixedIndex EncIndex →
+      Option (Memory × LazyOracle.State FixedIndex EncIndex × Nat)
+  | 0, _, memory, oracle => some (memory, oracle, 0)
+  | remaining + 1, index, memory, oracle =>
+      if inside : index < count then do
+        let first ← lazyGateDriverResult plan[index] memory oracle
+        let rest ← lazyGateLoopResults plan remaining (index + 1) first.1 first.2.1
+        pure (rest.1, rest.2.1, first.2.2 + rest.2.2)
+      else none
+
+/-- Every successful loop stays within the sum of its gate limits. -/
+theorem lazyGateLoopResults_cost {count : Nat} {FixedIndex EncIndex : Type}
+    [Fintype FixedIndex] [Fintype EncIndex] [DecidableEq FixedIndex] [DecidableEq EncIndex]
+    (plan : Vector GateCode count) (remaining index : Nat)
+    (memory : Memory) (oracle : LazyOracle.State FixedIndex EncIndex)
+    (result : Memory × LazyOracle.State FixedIndex EncIndex × Nat)
+    (success : lazyGateLoopResults plan remaining index memory oracle = some result) :
+    result.2.2 ≤ 117 * remaining := by
+  induction remaining generalizing index memory oracle result with
+  | zero => simp [lazyGateLoopResults] at success; cases success; simp
+  | succ remaining ih =>
+      simp only [lazyGateLoopResults] at success
+      split at success
+      · rename_i inside
+        cases first : lazyGateDriverResult plan[index] memory oracle with
+        | none => simp [first] at success
+        | some firstResult =>
+            cases rest : lazyGateLoopResults plan remaining (index + 1) firstResult.1 firstResult.2.1 with
+            | none => simp [first, rest] at success
+            | some restResult =>
+                simp [first, rest] at success
+                cases success
+                have firstBound := lazyGateDriverResult_cost _ _ _ firstResult first
+                have restBound := ih _ _ _ restResult rest
+                dsimp only
+                rw [Nat.mul_succ]
+                omega
+      · contradiction
+
+end Kriterion.ArgoMAC.ArithmeticSimulator

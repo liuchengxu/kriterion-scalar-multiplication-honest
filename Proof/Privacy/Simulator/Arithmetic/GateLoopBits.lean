@@ -97,4 +97,53 @@ theorem gateLoopSamples_bits {count : Nat} (plan : Vector GateCode count)
         subst result
         rfl
 
+/-- Each strict gate preserves all bit stacks. -/
+theorem lazyGateDriverResult_bits {FixedIndex EncIndex : Type}
+    [Fintype FixedIndex] [Fintype EncIndex] [DecidableEq FixedIndex] [DecidableEq EncIndex]
+    (gate : GateCode) (memory : Memory) (oracle : Cryptography.LazyOracle.State FixedIndex EncIndex)
+    (result) (success : lazyGateDriverResult gate memory oracle = some result) :
+    result.1.bits = memory.bits := by
+  unfold lazyGateDriverResult at success
+  dsimp only [Bind.bind] at success
+  obtain ⟨first, firstEq, second, secondEq, success⟩ :=
+    (by simpa only [Option.bind_eq_some_iff] using success)
+  have firstBits := (lazyGateSlot_memory gate 0 _ first.1 oracle first.2 firstEq).2.1
+  have secondBits := (lazyGateSlot_memory gate 1 _ second.1 first.2 second.2 secondEq).2.1
+  split at success
+  · obtain ⟨third, thirdEq, success⟩ := Option.bind_eq_some_iff.mp success
+    cases success
+    have thirdBits := (lazyGateSlot_memory gate 2 _ third.1 second.2 third.2 thirdEq).2.1
+    rw [(gateDirectiveRestore_data third.1).2]
+    rw [thirdBits]
+    change second.1.bits = memory.bits
+    exact secondBits.trans (firstBits.trans (gateDriverPrepared_bits gate memory))
+  · cases success
+    rw [(gateDirectiveRestore_data (executeLinear gateDriverTest second.1)).2]
+    change second.1.bits = memory.bits
+    exact secondBits.trans (firstBits.trans (gateDriverPrepared_bits gate memory))
+
+/-- Each successful strict loop preserves all bit stacks. -/
+theorem lazyGateLoopResults_bits {count : Nat} {FixedIndex EncIndex : Type}
+    [Fintype FixedIndex] [Fintype EncIndex] [DecidableEq FixedIndex] [DecidableEq EncIndex]
+    (plan : Vector GateCode count) (remaining index : Nat) (memory : Memory)
+    (oracle : Cryptography.LazyOracle.State FixedIndex EncIndex) (result)
+    (success : lazyGateLoopResults plan remaining index memory oracle = some result) :
+    result.1.bits = memory.bits := by
+  induction remaining generalizing index memory oracle result with
+  | zero =>
+    simp only [lazyGateLoopResults, Option.some.injEq] at success
+    subst result
+    rfl
+  | succ remaining ih =>
+    unfold lazyGateLoopResults at success
+    split at success
+    · rename_i inside
+      dsimp only [Bind.bind] at success
+      obtain ⟨head, reached, tail, tailReached, equal⟩ :=
+        (by simpa only [Option.bind_eq_some_iff] using success)
+      cases equal
+      exact (ih (index + 1) head.1 head.2.1 tail tailReached).trans
+        (lazyGateDriverResult_bits plan[index] memory oracle head reached)
+    · contradiction
+
 end Kriterion.ArgoMAC.ArithmeticSimulator

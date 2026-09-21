@@ -68,45 +68,6 @@ def AdaptiveAdversary.rebase {oracle : OracleSpec} {Input Public Packed Labels :
   decide parameter value labels auxiliary state :=
     adversary.decide parameter (pack value) labels auxiliary state
 
-/-- A transmitted-value adapter preserves every oracle-state obligation. -/
-theorem OracleSimulation.mapPublic
-    {FixedIndex EncIndex Input Output Public Packed Labels Topology State : Type}
-    {simulator : Simulator Input Output Public Labels Topology State}
-    {handler : OracleHandler (publicOracleSpec FixedIndex EncIndex) State}
-    {view : State → PublicOracle FixedIndex EncIndex}
-    (rules : OracleSimulation simulator handler view) (pack : Public → Packed) :
-    OracleSimulation (simulator.mapPublic pack) handler view := by
-  obtain ⟨valid, seen, initial, query, encode⟩ := rules
-  refine ⟨valid, seen, ?_, query, encode⟩
-  intro parameter topology result member
-  dsimp only [Simulator.mapPublic] at member
-  rw [PMF.support_map] at member
-  obtain ⟨original, originalMember, rfl⟩ := member
-  exact initial parameter topology original originalMember
-
-/-- A transmitted-value adapter preserves the advantage bound: both experiments
-are the same games composed with the same map. -/
-theorem ConcreteAdaptivePrivacy.mapPublic
-    {oracle : OracleSpec} {Circuit Input Output Randomness Public Packed Key Labels
-      EvaluationOracle Topology State Aux : Type}
-    {scheme : GarbledCircuit Circuit Input Output Randomness Public Key Labels EvaluationOracle}
-    {topology : Circuit → Topology} {simulator : Simulator Input Output Public Labels Topology State}
-    {randomTape : Nat → PMF Randomness} {realOracle : OracleHandler oracle Randomness}
-    {idealOracle : OracleHandler oracle State} {bits : Nat}
-    (privacy : ConcreteAdaptivePrivacy (Aux := Aux) scheme topology simulator randomTape
-      realOracle idealOracle bits)
-    (pack : Public → Packed) (unpack : Packed → Public) :
-    ConcreteAdaptivePrivacy (Aux := Aux) (scheme.mapPublic pack unpack) topology
-      (simulator.mapPublic pack) randomTape realOracle idealOracle bits := by
-  intro adversary circuit auxiliary parameter
-  let original : AdaptiveAdversary oracle Input Public Labels Aux :=
-    ⟨adversary.State, adversary.firstQueryBudget, adversary.secondQueryBudget,
-      fun parameter value auxiliary => adversary.chooseInput parameter (pack value) auxiliary,
-      fun parameter value labels => adversary.decide parameter (pack value) labels⟩
-  simpa only [realGame, idealGame, GarbledCircuit.mapPublic, Simulator.mapPublic,
-    PMF.bind_map, Function.comp_def, adversaryWork, original]
-    using privacy original circuit auxiliary parameter
-
 end Kriterion.GarbledCircuit
 
 namespace Kriterion.ArgoMAC.Lamport

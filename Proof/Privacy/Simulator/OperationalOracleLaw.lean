@@ -1,5 +1,5 @@
 import Proof.Privacy.Simulator.OperationalOracle
-import Cryptography.Primitives
+import Cryptography.LazyOracle
 
 namespace Kriterion.ArgoMAC.Security.OperationalOracle
 open Cryptography
@@ -249,16 +249,6 @@ theorem SparsePermutation.inverse_joint {size : Nat}
       simp only [PMF.map_comp, Function.comp_def] at target
       convert target using 1 <;> rfl
 
-/-- This interpreter samples each oracle transition when a query reaches it. -/
-def runSampled {oracle : OracleSpec} {Result State : Type}
-    (handler : ∀ query, State → PMF (oracle.Answer query × State)) :
-    {budget : Nat} → OracleProgram oracle Result budget → State → PMF (Result × State)
-  | _, .pure distribution, state => distribution.map (fun value => (value, state))
-  | _, .query request next, state =>
-      (handler request state).bind (fun answer => runSampled handler (next answer.1) answer.2)
-  | _, .sample distribution next, state =>
-      distribution.bind (fun value => runSampled handler (next value) state)
-
 /-- A one-step joint law extends to every adaptive oracle program. -/
 theorem adaptive_joint_law {oracle : OracleSpec} {Result Sparse Eager : Type}
     (eager : OracleHandler oracle Eager)
@@ -297,6 +287,48 @@ def emptyCompletionEquiv (size : Nat) :
   invFun π := ⟨π, by intro a; exact (Nat.not_lt_zero _ a.property).elim⟩
   left_inv _ := rfl
   right_inv _ := rfl
+
+
+/-- Fresh programming preserves the uniform law of the remaining completions. -/
+theorem SparsePermutation.program_completion {size : Nat}
+    (state next : SparsePermutation size) (input output : Fin size)
+    (success : LazyOracle.permutationProgram state input output = some next) :
+    (PMF.uniformOfFintype state.Completion).map
+      (fun π => π.val.trans (Equiv.swap (π.val input) output)) =
+      (PMF.uniformOfFintype next.Completion).map Subtype.val := by
+  classical
+  unfold LazyOracle.permutationProgram at success
+  split at success
+  · rename_i fresh
+    cases success
+    have room : state.used < size := by
+      have := (state.input.symm input).isLt
+      have notUsed := fresh.1
+      unfold SparsePermutation.knownInput at notUsed
+      omega
+    let target := state.extend room (state.input.symm input) (state.output.symm output)
+    have transport (π : Equiv.Perm (Fin size)) :
+        (∀ x : {x : Fin size // target.knownInput x}, π x = target.assignment x) ↔
+        (∀ x : {x : Fin size // state.knownInput x}, π x = state.assignment x) ∧ π input = output := by
+      simpa only [Equiv.apply_symm_apply] using
+        state.extend_completion_iff room (state.input.symm input) (state.output.symm output)
+          (Nat.le_of_not_gt fresh.1) (Nat.le_of_not_gt fresh.2) π
+    let Programmed := {π : Equiv.Perm (Fin size) //
+      (∀ x : {x : Fin size // state.knownInput x}, π x = state.assignment x) ∧ π input = output}
+    let equivalence : target.Completion ≃ Programmed := {
+      toFun := fun π => ⟨π.val, (transport π.val).mp π.property⟩
+      invFun := fun π => ⟨π.val, (transport π.val).mpr π.property⟩
+      left_inv := fun _ => rfl
+      right_inv := fun _ => rfl }
+    letI : Nonempty Programmed := ⟨equivalence (Classical.choice inferInstance)⟩
+    have law := congrArg (fun distribution : PMF Programmed => distribution.map Subtype.val)
+      (programCompatiblePermutation_uniform {x | state.knownInput x} {x | state.knownOutput x}
+        state.assignment input fresh.1 output fresh.2)
+    have targetLaw := congrArg (fun distribution : PMF Programmed => distribution.map Subtype.val)
+      (uniform_equiv equivalence)
+    simp only [PMF.map_comp] at law targetLaw
+    exact law.trans targetLaw.symm
+  · contradiction
 
 
 end

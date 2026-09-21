@@ -86,68 +86,6 @@ theorem checkFixedCost_le (history : List (PermutationRecord Pipeline.FixedKeyIn
     simp only [checkFixedCost]
     split <;> simp_all
 
-/-- One attempt uses a history scan and at most one permutation programming operation. -/
-def executeFixedCost (state : SimulatorState) (command : FixedCommand) : SimulatorState × Nat :=
-  let checked := checkFixedCost state.fixedTranscript command
-  if checked.1 then
-    (programFixed state command.1 command.2.1 command.2.2, checked.2 + 1)
-  else (markBad state, checked.2)
-
-theorem executeFixedCost_correct (state : SimulatorState) (command : FixedCommand) :
-    (executeFixedCost state command).1 = executeFixed state command := by
-  simp only [executeFixedCost, checkFixedCost_correct, executeFixed, tryProgramFixed]
-  split <;> rfl
-
-theorem executeFixedCost_le (state : SimulatorState) (command : FixedCommand) :
-    (executeFixedCost state command).2 ≤ state.fixedTranscript.length + 1 := by
-  have bound := checkFixedCost_le state.fixedTranscript command
-  simp only [executeFixedCost]
-  split <;> simp_all
-  omega
-
-theorem executeFixed_history_length (state : SimulatorState) (command : FixedCommand) :
-    (executeFixed state command).fixedTranscript.length ≤ state.fixedTranscript.length + 1 := by
-  simp only [executeFixed, tryProgramFixed]
-  split <;> simp [programFixed, markBad]
-
-/-- The interpreter adds the costs of its actual execution path. -/
-def executeFixedCommandsCost (state : SimulatorState) : List FixedCommand → SimulatorState × Nat
-  | [] => (state, 0)
-  | command :: rest =>
-    let first := executeFixedCost state command
-    let tail := executeFixedCommandsCost first.1 rest
-    (tail.1, first.2 + tail.2)
-
-theorem executeFixedCommandsCost_correct (state : SimulatorState) (commands : List FixedCommand) :
-    (executeFixedCommandsCost state commands).1 = executeFixedCommands state commands := by
-  induction commands generalizing state with
-  | nil => rfl
-  | cons command rest inductionHypothesis =>
-    simp only [executeFixedCommandsCost, inductionHypothesis, executeFixedCost_correct]
-    rfl
-
-/-- The command interpreter has a quadratic scan bound, including failed attempts. -/
-theorem executeFixedCommandsCost_le (state : SimulatorState) (commands : List FixedCommand) :
-    (executeFixedCommandsCost state commands).2 ≤
-      commands.length * (state.fixedTranscript.length + commands.length) := by
-  induction commands generalizing state with
-  | nil => simp [executeFixedCommandsCost]
-  | cons command rest inductionHypothesis =>
-    have step := executeFixedCost_le state command
-    have growth := executeFixed_history_length state command
-    have tail := inductionHypothesis (executeFixedCost state command).1
-    rw [executeFixedCost_correct] at tail
-    simp only [executeFixedCommandsCost, List.length_cons, executeFixedCost_correct]
-    have product : rest.length * ((executeFixed state command).fixedTranscript.length + rest.length) ≤
-        rest.length * (state.fixedTranscript.length + 1 + rest.length) :=
-      Nat.mul_le_mul_left _ (Nat.add_le_add_right growth _)
-    calc
-      _ ≤ state.fixedTranscript.length + 1 +
-          rest.length * (state.fixedTranscript.length + 1 + rest.length) :=
-        Nat.add_le_add step (tail.trans product)
-      _ ≤ (rest.length + 1) * (state.fixedTranscript.length + (rest.length + 1)) := by
-        nlinarith
-
 /-- The complete valid schedule uses at most 835914 programming attempts. -/
 theorem selectedSchedule_commands_length [FieldCertificate] [GroupCertificate]
     (state : CircuitSimulatorState) (input : AffineInput) (output : Point)

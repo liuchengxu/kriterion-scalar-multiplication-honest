@@ -1,3 +1,4 @@
+import Proof.Privacy.Simulator.StrictOracleLaw
 import Proof.Privacy.Source.Invalid.SharedInvalidBadMass
 import Proof.Privacy.Source.Invalid.SharedCurveSupportedRatio
 import Proof.Privacy.Source.Valid.SharedPipelineSupportedRatio
@@ -161,6 +162,36 @@ theorem sharedCombinedBad_mass_le [FieldCertificate] [GroupCertificate] {Aux : T
     (Prod.fst ⁻¹' {coin | sharedFullPipelinePrefixBad scalar coin})
     ((fun coin => (coin.1.1, coin.1.2.1, coin.2)) ⁻¹' {coin | sharedFullInvalidHashHit coin})).trans_eq
   rw [← PMF.toOuterMeasure_map_apply, first, ← PMF.toOuterMeasure_map_apply, sharedCombinedSource_full]
+
+section
+open OperationalOracle FieldMacToECMac
+attribute [local irreducible] sharedRetainedPipelineCommands retainedFullTable
+set_option maxHeartbeats 2000000 in
+/-- The existing combined good event supplies strict programming freshness. -/
+theorem sharedCombinedGood_strictCommands [FieldCertificate] [GroupCertificate] {State : Type}
+    (scalar : ScalarField)
+    (coin : (Shared.Randomness × FullCircuitSource ×
+      (AffineInput × (State × Shared.Simulator.OracleState × List (Sigma sharedRealOracleSpec.Answer)))) ×
+        SharedFullGateTranscript State)
+    (lazy : LazyOracle.State Shared.FixedKeyIndex EncPRF.PermutationIndex)
+    (matching : HistoryMatches lazy
+      (transcriptFinalState idealOracleHandler
+        (sharedInitialSourceOracle (maskRetainedTape coin.1.1.val).2.2.2) coin.1.2.2.2.2.2).fixedTranscript)
+    (good : ¬ sharedCombinedBad scalar coin) :
+    let rest := (sharedGarblingOracleKeyEquiv coin.1.1).2
+    let keys := outputKeys construction scalar rest.reference.offsets
+    let commands := sharedRetainedPipelineCommands rest keys coin.1.2.2.1 coin.1.1.val.inputMacKey coin.1.2.1
+    (strictCommands lazy (commands.map fun command =>
+      (Shared.fixedIndex command.1, command.2.1, command.2.2))).isSome = true := by
+  have prefixGood : ¬ sharedFullPipelinePrefixBad scalar coin.1 := fun bad => good (Or.inl bad)
+  unfold sharedFullPipelinePrefixBad at prefixGood
+  have tag := Classical.not_not.mp prefixGood
+  have fresh := tag.2.2.2
+  apply strictCommands_fresh lazy _ _ matching
+  simp only [List.map_map, Function.comp_def]
+  exact fresh
+
+end
 
 end
 end Kriterion.ArgoMAC.Security
