@@ -1144,7 +1144,7 @@ theorem CurveGateRequest.schedule_length (request : CurveGateRequest)
   simp only [CurveGateRequest.schedule, List.length_append, digitGateSchedule_length]
   omega
 
-/-- These requests contain the selected targets for all 92 complete RCB rows. -/
+/-- These requests contain the selected targets for all 91 complete RCB rows. -/
 abbrev PointGateRequests := Vector BiquadraticRowRequest FieldMacToECMac.outputMacCount
 
 def pointGateSchedule (requests : PointGateRequests)
@@ -1939,7 +1939,7 @@ theorem BiquadraticRowRequest.evaluate (request : BiquadraticRowRequest)
   simp only [BiquadraticRowRequest.table, BiquadraticRowRequest.result]
   rw [xValue, yValue, zValue]
 
-/-- A satisfied 92-row schedule returns every requested homogeneous value. -/
+/-- A satisfied 91-row schedule returns every requested homogeneous value. -/
 theorem pointGateSchedule_evaluate (requests : PointGateRequests)
     (state : SimulatorState) (input : AffineInput) (inputMac : InputMac)
     (satisfied : GateScheduleSatisfied state (pointGateSchedule requests input inputMac)) :

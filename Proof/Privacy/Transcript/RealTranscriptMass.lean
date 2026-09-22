@@ -11,7 +11,7 @@ open scoped ENNReal
 
 noncomputable section
 
-/-- This index lists the five curve adaptors and all 92 rows of point adaptors. -/
+/-- This index lists the five curve adaptors and all 91 rows of point adaptors. -/
 abbrev RawCircuitGate := (Fin 5 × Fin coordinateBitCount) ⊕
   (Fin FieldMacToECMac.outputMacCount ×
     ((Fin 4 × Fin coordinateBitCount) ⊕ (Fin 3 × Fin coordinateBitCount) ⊕
@@ -298,7 +298,7 @@ theorem rawRealOracleTranscript_mass {Gate : Type} [Fintype Gate] [Fintype Block
   rw [event]
   exact rawFixedTranscript_mass gates randomness.fixedKeyOracle _ fixed.1 domainsDistinct rangesDistinct
 
-/-- This prescription uses the actual 92 digit tweaks in one point adaptor. -/
+/-- This prescription uses the actual 91 digit tweaks in one point adaptor. -/
 def pointRawGatePrescription (coordinate : Pipeline.PointCoordinate) (adaptor : Pipeline.PointAdaptor)
     (window : Nat) (key : BitAdaptor.Key)
     (slopes : Fin FieldMacToECMac.outputMacCount → BaseField)

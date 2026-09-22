@@ -77,25 +77,52 @@ def curveLocation : Fin 5 → Pipeline.FixedKeyLocation
   | 0 => .curve .y4 | 1 => .curve .y6 | 2 => .curve .x3
   | 3 => .curve .x5 | 4 => .curve .x7
 
-def pointCoordinate : Fin 3 → Pipeline.PointCoordinate
-  | 0 => .x | 1 => .y | 2 => .z
-
+/-- The five-adaptor order. This is the Z row, which keeps every adaptor. -/
 def pointAdaptor : Fin 5 → Pipeline.PointAdaptor
   | 0 => .y6 | 1 => .y8 | 2 => .y10 | 3 => .x7 | 4 => .x9
+
+/-- The X row is the four-adaptor RCB basis. It drops `x7`, so no X row reads
+that location and the program must not query it. -/
+def xAdaptor : Fin 4 → Pipeline.PointAdaptor
+  | 0 => .y6 | 1 => .y8 | 2 => .y10 | 3 => .x9
+
+/-- The Y row is the x-only cubic basis. It rebinds `y ^ 2` to `x ^ 3 + 3`, so
+it drops `y8` and `y10` and keeps three adaptors. -/
+def yAdaptor : Fin 3 → Pipeline.PointAdaptor
+  | 0 => .y6 | 1 => .x7 | 2 => .x9
+
+/-- A gate oracle that answers without a query. It fills the adaptor windows a
+coordinate's row does not read: the assembled oracle keeps the full five-window
+shape, but the program never queries the locations behind those windows. -/
+def unusedGate : BitAdaptor.FixedKeyOracle := cachedGate 0 0
 
 def curveOraclesFrom (gates : Vector (Vector BitAdaptor.FixedKeyOracle coordinateBitCount) 5) :
     CurveMembership.Oracles :=
   let get (which : Fin 5) (index : Nat) := gates[which].get ⟨index % coordinateBitCount, Nat.mod_lt _ (by decide)⟩
   ⟨get 0, get 1, get 2, get 3, get 4⟩
 
-def pointOraclesFrom (gates : Vector (Vector (Vector
-    (Vector BitAdaptor.FixedKeyOracle coordinateBitCount) 5) 3) FieldMacToECMac.outputMacCount) :
-    FieldMacToECMac.Oracles :=
-  Vector.ofFn fun output =>
-    let get (coordinate : Fin 3) : Biquadratic.Oracles :=
-      let window (which : Fin 5) (index : Nat) := gates[output][coordinate][which].get ⟨index % coordinateBitCount, Nat.mod_lt _ (by decide)⟩
-      ⟨window 0, window 1, window 2, window 3, window 4⟩
-    ⟨get 0, get 1, get 2⟩
+/-- The X row reads `y6`, `y8`, `y10` and `x9`. Its `x7` slot is a placeholder:
+`Biquadratic.garbleX` never mentions it, and the X row's table sets `x7` to
+`none`, so `Biquadratic.evaluate` reads it through `evaluateDigitNone` without
+calling it. -/
+def xOracles (gates : Vector (Vector BitAdaptor.FixedKeyOracle coordinateBitCount) 4) :
+    Biquadratic.Oracles :=
+  let get (which : Fin 4) (index : Nat) := gates[which].get ⟨index % coordinateBitCount, Nat.mod_lt _ (by decide)⟩
+  ⟨get 0, get 1, get 2, fun _ => unusedGate, get 3⟩
+
+/-- The Y row reads `y6`, `x7` and `x9`. `Biquadratic.garbleY` and
+`Biquadratic.evaluateY` never mention `y8` or `y10`, so both slots are
+placeholders and neither location is queried. -/
+def yOracles (gates : Vector (Vector BitAdaptor.FixedKeyOracle coordinateBitCount) 3) :
+    Biquadratic.Oracles :=
+  let get (which : Fin 3) (index : Nat) := gates[which].get ⟨index % coordinateBitCount, Nat.mod_lt _ (by decide)⟩
+  ⟨get 0, fun _ => unusedGate, fun _ => unusedGate, get 1, get 2⟩
+
+/-- The Z row reads all five adaptors. -/
+def zOracles (gates : Vector (Vector BitAdaptor.FixedKeyOracle coordinateBitCount) 5) :
+    Biquadratic.Oracles :=
+  let get (which : Fin 5) (index : Nat) := gates[which].get ⟨index % coordinateBitCount, Nat.mod_lt _ (by decide)⟩
+  ⟨get 0, get 1, get 2, get 3, get 4⟩
 
 def curveGates {budget : Nat}
     (gate : Pipeline.FixedKeyLocation → Fin coordinateBitCount → Program BitAdaptor.FixedKeyOracle budget) :
@@ -103,14 +130,49 @@ def curveGates {budget : Nat}
   (QueryProgram.ofFn 5 fun which => QueryProgram.ofFn coordinateBitCount fun position =>
     gate (curveLocation which) position).map curveOraclesFrom
 
+def xGates {budget : Nat}
+    (gate : Pipeline.FixedKeyLocation → Fin coordinateBitCount → Program BitAdaptor.FixedKeyOracle budget)
+    (output : Fin FieldMacToECMac.outputMacCount) :
+    Program (Vector (Vector BitAdaptor.FixedKeyOracle coordinateBitCount) 4)
+      (4 * (coordinateBitCount * budget)) :=
+  QueryProgram.ofFn 4 fun which => QueryProgram.ofFn coordinateBitCount fun position =>
+    gate (.point output .x (xAdaptor which)) position
+
+def yGates {budget : Nat}
+    (gate : Pipeline.FixedKeyLocation → Fin coordinateBitCount → Program BitAdaptor.FixedKeyOracle budget)
+    (output : Fin FieldMacToECMac.outputMacCount) :
+    Program (Vector (Vector BitAdaptor.FixedKeyOracle coordinateBitCount) 3)
+      (3 * (coordinateBitCount * budget)) :=
+  QueryProgram.ofFn 3 fun which => QueryProgram.ofFn coordinateBitCount fun position =>
+    gate (.point output .y (yAdaptor which)) position
+
+def zGates {budget : Nat}
+    (gate : Pipeline.FixedKeyLocation → Fin coordinateBitCount → Program BitAdaptor.FixedKeyOracle budget)
+    (output : Fin FieldMacToECMac.outputMacCount) :
+    Program (Vector (Vector BitAdaptor.FixedKeyOracle coordinateBitCount) 5)
+      (5 * (coordinateBitCount * budget)) :=
+  QueryProgram.ofFn 5 fun which => QueryProgram.ofFn coordinateBitCount fun position =>
+    gate (.point output .z (pointAdaptor which)) position
+
+/-- One point row queries four X, three Y and five Z adaptors, the twelve active
+adaptors of the RCB row, at every coordinate bit position. The other three of the
+fifteen coordinate/adaptor pairs are read by no row of that coordinate, so the
+program does not query them: `xAdaptor` and `yAdaptor` list the active pairs for
+their own coordinates, and the Z row's `pointAdaptor` keeps all five. This is the
+schedule the simulator already programs --
+`GateDirectiveSchedule.pointRowDirectiveAt` visits four x, three y and five z
+adaptors per row -- so the queried set and the simulated set agree. -/
 def pointGates {budget : Nat}
     (gate : Pipeline.FixedKeyLocation → Fin coordinateBitCount → Program BitAdaptor.FixedKeyOracle budget) :
     Program FieldMacToECMac.Oracles
-      (FieldMacToECMac.outputMacCount * (3 * (5 * (coordinateBitCount * budget)))) :=
-  (QueryProgram.ofFn FieldMacToECMac.outputMacCount fun output =>
-    QueryProgram.ofFn 3 fun coordinate => QueryProgram.ofFn 5 fun which =>
-      QueryProgram.ofFn coordinateBitCount fun position =>
-        gate (.point output (pointCoordinate coordinate) (pointAdaptor which)) position).map pointOraclesFrom
+      (FieldMacToECMac.outputMacCount *
+        (4 * (coordinateBitCount * budget) +
+          (3 * (coordinateBitCount * budget) + 5 * (coordinateBitCount * budget)))) :=
+  QueryProgram.ofFn FieldMacToECMac.outputMacCount fun output =>
+    (xGates gate output).bind fun x =>
+    (yGates gate output).bind fun y =>
+    (zGates gate output).map fun z =>
+      (⟨xOracles x, yOracles y, zOracles z⟩ : FieldMacToECMac.RowOracles)
 
 /-- Which input coordinate each gate reads. The three-adaptor Y row rebinds
 `y ^ 2` to `x ^ 3 + 3`, so every adaptor it keeps reads the x coordinate; it
@@ -140,17 +202,36 @@ theorem curveGarble_correct (oracle : PublicOracle FixedKeyIndex EncPRF.Permutat
     CurveMembership.garble, DigitAdaptor.garble, Fin.getElem_fin, Vector.get_ofFn, Vector.getElem_ofFn,
     position_mod, curveLocation, locationKey, Pipeline.curveOracles, garbleGate_correct]
 
+/-- The one slot the pruned evaluator needs a precondition for: a transmitted X
+row carries no `x7`. Two of the three omitted coordinate/adaptor pairs need no
+hypothesis at all -- `evaluateY` takes the three-adaptor basis a Y row actually
+carries, so it never reads `y8` or `y10` for any table -- while `Biquadratic.evaluate`
+consults the X row's `x7`, so pruning that query is sound only where the slot is
+absent. That is a property of the transmitted table, not of an arbitrary logical
+one, so `pointEvaluate_correct` carries it and `packedEvaluateProgram_correct`
+discharges it from `unpack`. -/
+structure TransmittedX (table : FieldMacToECMac.Table) : Prop where
+  x7_absent : ∀ index, (table.x.get index).x7 = none
+
+/-- Every transmitted point-MAC table carries no `x7` in its X rows. -/
+theorem transmittedX_unpack (table : Pipeline.PackedTable) :
+    TransmittedX (Pipeline.PackedTable.unpack table).pointMAC := ⟨by
+  intro index
+  simp only [Pipeline.PackedTable.unpack, FieldMacToECMac.PackedTable.unpack,
+    Vector.get_map, Biquadratic.PackedXTable.unpack]⟩
+
 theorem pointGarble_correct (oracle : PublicOracle FixedKeyIndex EncPRF.PermutationIndex)
     (input : InputMacKey) (rows : FieldMacToECMac.Rows) (randomness : FieldMacToECMac.Randomness) :
     FieldMacToECMac.garble rows randomness
       ((pointGates fun location position => garbleGate location position
         ((locationKey input location).get position)).eval (publicAnswer oracle)) input =
       FieldMacToECMac.garble rows randomness (Pipeline.pointOracles (expandOracle oracle.1)) input := by
-  simp only [pointGates, QueryProgram.eval_map, QueryProgram.eval_ofFn, pointOraclesFrom,
+  simp only [pointGates, QueryProgram.eval_map, QueryProgram.eval_ofFn, QueryProgram.eval_bind,
+    xGates, yGates, zGates, xOracles, yOracles, zOracles,
     FieldMacToECMac.garble, FieldMacToECMac.garbleRow,
     Biquadratic.garbleX, Biquadratic.garbleY, Biquadratic.garbleZ,
     DigitAdaptor.garble, Fin.getElem_fin, Vector.get_ofFn, Vector.getElem_ofFn,
-    position_mod, pointCoordinate, pointAdaptor, locationKey,
+    position_mod, xAdaptor, yAdaptor, pointAdaptor, locationKey,
     Pipeline.pointOracles, Pipeline.biquadraticOracles, garbleGate_correct]
 
 theorem curveEvaluate_correct (oracle : PublicOracle FixedKeyIndex EncPRF.PermutationIndex)
@@ -165,7 +246,8 @@ theorem curveEvaluate_correct (oracle : PublicOracle FixedKeyIndex EncPRF.Permut
     position_mod, curveLocation, locationMac, Pipeline.curveOracles, evaluateGate_correct]
 
 theorem pointEvaluate_correct (oracle : PublicOracle FixedKeyIndex EncPRF.PermutationIndex)
-    (input : InputMac) (table : FieldMacToECMac.Table) (affine : AffineInput) :
+    (input : InputMac) (table : FieldMacToECMac.Table) (affine : AffineInput)
+    (absent : TransmittedX table) :
     FieldMacToECMac.evaluate table
       ((pointGates fun location position => evaluateGate location position
         ((locationMac input location).get position)).eval (publicAnswer oracle)) affine input =
@@ -179,10 +261,12 @@ theorem pointEvaluate_correct (oracle : PublicOracle FixedKeyIndex EncPRF.Permut
       Biquadratic.evaluateDigit (Pipeline.fixedKeyGate (expandOracle oracle.1) location) rows value labels := by
     cases rows <;> simp only [Biquadratic.evaluateDigit, DigitAdaptor.evaluate,
       Vector.get_ofFn, position_mod, evaluateGate_correct]
-  simp only [pointGates, QueryProgram.eval_map, QueryProgram.eval_ofFn, pointOraclesFrom,
+  simp only [pointGates, QueryProgram.eval_map, QueryProgram.eval_ofFn, QueryProgram.eval_bind,
+    xGates, yGates, zGates, xOracles, yOracles, zOracles,
+    absent.x7_absent, Biquadratic.evaluateDigitNone,
     FieldMacToECMac.evaluate, FieldMacToECMac.evaluateHomogeneous,
     Biquadratic.evaluate, Biquadratic.evaluateY, Fin.getElem_fin, Vector.get_ofFn, Vector.getElem_ofFn,
-    pointCoordinate, pointAdaptor, locationMac,
+    xAdaptor, yAdaptor, pointAdaptor, locationMac,
     Pipeline.pointOracles, Pipeline.biquadraticOracles, digit]
 
 def transformLabel (keys : WhiteningKeys) (coordinate : EncPRF.Coordinate)
@@ -223,13 +307,15 @@ theorem transformMac_correct (oracle : PublicOracle FixedKeyIndex EncPRF.Permuta
   rfl
 
 /-- One hash query, the `1016` transform queries, the five curve adaptors at
-254 positions with five queries each, and one five-query gate for every point
-coordinate, window and position of every transmitted row. -/
-def garbleQueries : Nat := 1740917
+254 positions with five queries each, and one five-query gate for each of the
+twelve active adaptors of every transmitted row. The fifteen point
+coordinate/adaptor pairs that `pointGates` used to enumerate include three that
+no row reads -- `x7` of X, and `y8` and `y10` of Y -- and their queries are gone. -/
+def garbleQueries : Nat := 1394207
 
 /-- Three curve-adaptor queries per position, one hash query, the `508`
-transform queries, and three queries per point gate. -/
-def evaluateQueries : Nat := 1044449
+transform queries, and three queries per active point gate. -/
+def evaluateQueries : Nat := 836423
 
 /-- This program requests all gate answers before it constructs the table. -/
 def garbleProgram [FieldCertificate] [GroupCertificate] (_parameter : Nat)
@@ -280,6 +366,7 @@ theorem garbleProgram_correct [FieldCertificate] [GroupCertificate]
 set_option backward.isDefEq.respectTransparency false in
 theorem evaluateProgram_correct [FieldCertificate] [GroupCertificate]
     (table : Pipeline.Table) (input : AffineInput) (labels : GarbledCircuit.LamportSignature)
+    (absent : TransmittedX table.pointMAC)
     (oracle : PublicOracle FixedKeyIndex EncPRF.PermutationIndex) :
     (evaluateProgram table input labels).eval (publicAnswer oracle) =
       programCircuit.evaluate oracle table input labels := by
@@ -292,7 +379,7 @@ theorem evaluateProgram_correct [FieldCertificate] [GroupCertificate]
     rw [QueryProgram.eval.eq_def]
     dsimp only
     rw [curveEvaluate_correct, QueryProgram.eval_bind, transformMac_correct,
-      QueryProgram.eval_map, pointEvaluate_correct]
+      QueryProgram.eval_map, pointEvaluate_correct _ _ _ _ absent]
     rfl
 
 /-! ## The transmitted table
@@ -333,6 +420,7 @@ theorem packedEvaluateProgram_correct [FieldCertificate] [GroupCertificate]
     (packedEvaluateProgram table input labels).eval (publicAnswer oracle) =
       packedProgramCircuit.evaluate oracle table input labels := by
   rw [packedEvaluateProgram, evaluateProgram_correct]
-  rfl
+  · rfl
+  · exact transmittedX_unpack table
 
 end Kriterion.ArgoMAC.Shared

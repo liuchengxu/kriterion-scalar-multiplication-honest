@@ -5,7 +5,7 @@ import Proof.Privacy.Simulator.Arithmetic.RetargetedGateMemory
 namespace Kriterion.ArgoMAC.ArithmeticSimulator
 open BN254 Cryptography Cryptography.BoundedMachine Security
 
-/-- The thirteen point descriptors read their exact retargeted source records. -/
+/-- The twelve point descriptors read their exact retargeted source records. -/
 theorem pointGateCode_typed (sample : RowPublicSample) (input : AffineInput)
     (target : Fin 3 → BaseField) (mac : InputMac) (memory : Memory) (row : Fin FieldMacToECMac.outputMacCount)
     (coordinates : memory.ram (memory.registers 12) = BitVec.ofNat 256 input.x.val ∧

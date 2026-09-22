@@ -10,7 +10,7 @@ noncomputable section
 
 attribute [local instance] rawBucketUseFintype fixedQueryDomainFintype rawInactiveBucketFintype residualFixedQueryDomainFintype
 
-/-- The actual circuit uses one curve gate or 92 point gates in each used slot. -/
+/-- The actual circuit uses one curve gate or 91 point gates in each used slot. -/
 def circuitBucketSize (index : Pipeline.FixedKeyIndex) : Nat :=
   match index.kind with
   | .curve _ => 1

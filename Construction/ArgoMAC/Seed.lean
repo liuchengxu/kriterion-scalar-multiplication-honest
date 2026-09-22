@@ -1,6 +1,7 @@
 /-
 This file derives one reproducible garbling tape from a 256-bit seed.
-`Kriterion.Benchmark.garble` runs the garbler on this tape.
+The garbler runs on this tape; the challenge reads the byte and query counts of
+`Submission.solution` through `Kriterion.Benchmark`.
 The security game samples the complete tape uniformly instead.
 The entry cannot use the Mathlib group law here. That law needs the BN254 field
 certificate, and the entry does not hold it. This file computes the clamped offset with

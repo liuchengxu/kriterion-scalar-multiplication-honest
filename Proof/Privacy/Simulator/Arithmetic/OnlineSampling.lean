@@ -45,7 +45,7 @@ theorem onlineSampling_run [BN254.FieldCertificate] (attempts : Nat) (base : Mem
   simp only [PMF.pure_map, Option.map_some, Nat.add_comm]
   rfl
 
-/-- The online machine stores the exact total law of 92 scales and 91 points. -/
+/-- The online machine stores the exact total law of 91 scales and 90 points. -/
 theorem onlineSampling_source [BN254.FieldCertificate] [BN254.GroupCertificate]
     (attempts : Nat) (base : Memory) (countFits : attempts < 2 ^ 256) :
     (run (onlineSampling attempts) (onlineSamplingBudget attempts + 1) ⟨(0 : Fin 8772), base⟩).map
