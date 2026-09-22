@@ -268,6 +268,9 @@ measures.
 The program enumerates, for each of the 91 transmitted rows, each of the three coordinates, each of the five
 adaptor windows at each of the 254 input positions. That is fifteen coordinate/adaptor pairs, but only **twelve**
 are read: the X row omits `x7`, and the Y row — which rebinds `y ^ 2` to `x ^ 3 + 3` — dropped `y8` and `y10`.
+That row is one adaptor shorter, not two: it also **gained** `y6`, so it carries three — `y6`, `x7`, `x9`, all
+reading the x coordinate — where the baseline's Y row carried four, `y8`, `y10`, `x7` and `x9`. That is the
+4 → 3 of lever A, and it is why the two dropped locations are read by no row at all.
 `Construction/OraclePrograms.lean` already recorded that about the *rows*; the program had not followed.
 
 Pruning the three unread pairs:
@@ -282,7 +285,13 @@ The garbling saving is exactly `91 × 3 × 5 × 254 = 346,710`, and the evaluati
 the garbling schedule asks five queries per active gate where the evaluator asks three. Both cost **zero bytes**:
 the bytes are the transmitted tables, and those did not change.
 
-Two points this section is careful about.
+Three points this section is careful about.
+
+- **This improves two scored metrics without changing the entry's rank.** `rankPolicy` is `ciphertext_bytes`
+  alone. The two query counts are scored criteria *beside* the ranked quantity, so the 19.92 % is a genuine
+  efficiency gain and a real improvement on two of the three scored metrics, but it does not move the entry's
+  position — and it never can while the policy is the byte count. It would become rank-relevant only if a
+  future revision widened `rankPolicy`.
 
 - **The declared numeral is a bound, not a count.** It is an upper bound the program must satisfy, so
   *under*-declaration fails to compile while *over*-declaration compiles silently. The 19.92 % is therefore

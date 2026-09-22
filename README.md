@@ -9,6 +9,11 @@ a 4-way GLV search with a fixed initial state and paid for it with one extra row
 is the length of the encoding of the circuit's declared public value, so every byte below is a byte of
 the published garbled circuit.
 
+The three metrics are not equally weighted. `rankPolicy` is `ciphertext_bytes` alone: the two query
+counts are scored criteria *beside* the ranked quantity, not rank tie-breakers. So the 19.92 % is a
+genuine efficiency gain and a real improvement on two of the three scored metrics, but the entry's rank
+follows the byte count and this lever does not move it.
+
 This is an **honest** construction: the evaluator never obtains the scalar. It receives 91
 offset-blinded points and Horner-sums them into `s·P`; each row is 7-way ambiguous in its digit,
 and recovering `s` from `s·P` is a discrete log. No simulator shortcut is used — the privacy proof
@@ -154,15 +159,18 @@ every privacy statement are untouched.
   the packing rather than replacing them**; `adaptivePrivacy` is still
   `ArithmeticSimulator.compiledAdaptivePrivacy`. The packed boundary is a *type-level* relabelling of
   the transmitted value, so the bounded machine is the baseline's, unchanged.
-- **One raised kernel budget, disclosed.** `Submission.lean` sets `set_option maxHeartbeats 4000000`
-  for a single check. The expense is an **additive type-level comparison** around `scheme`/`encoding`
-  — `Solution`'s later field types apply `encoding` to what `scheme` returns — measured at
-  **489 s** at that budget against a timeout at the default of 200,000. It is **not** a proof
-  problem: with all nine proof fields replaced by `sorry` the kernel still exceeds 100,000
-  heartbeats, and replacing `scheme` as well drops the check to 2 s. `attribute [local irreducible]
-  Wire.encoding` is already in force here and in `Proof/SharedGarbling.lean`; it binds the
-  *elaborator*, not the kernel, so it does not reach this. No proof depends on the budget, and the
-  previously accepted revision shipped the same line for the same check.
+- **No raised kernel budget.** The previously published revision of this entry set `set_option maxHeartbeats
+  4000000` in `Submission.lean` for a single check. That line is gone: the file carries **no `set_option` at
+  all** and checks at the default 200,000-heartbeat budget (`type checking 1.44ms` over the whole file). The
+  expense was an **additive type-level comparison** around `scheme`/`encoding` — `Solution`'s later field
+  types apply `encoding` to what `scheme` returns — and the cause was not its cost but its *shape*: the
+  `scheme` field held a lambda, which leaves a beta redex in the type of every later field, so no comparison
+  could be syntactic. Naming it `Shared.packedProgramScheme` — a constant declared with the challenge's own
+  `scheme` type — and stating `ciphertextSize` over that same constant makes the comparison syntactic. An
+  ascription on the lambda does not help; only the constant does. The earlier revision needed that budget
+  plus 8m12s to check the declaration, with the 200,000 default cutting it off after about 34 s. `attribute
+  [local irreducible] Wire.encoding` binds the *elaborator*, not the kernel, and was measured to do nothing
+  here.
 
 ## 6. Verification
 
@@ -182,9 +190,11 @@ limit (and less than the ~23 min the previously accepted run took there). The bu
 scratch: 4,497/4,497 jobs including `Proof`.
 
 `#print axioms Submission.solution` → `{propext, Classical.choice, Quot.sound}`. No `sorry`, no
-`axiom`, no `native_decide`, no `implemented_by`, no `extern`. The single `noncomputable` is
-`Simulator.mapPublic`, mirroring the baseline's own `noncomputable Simulator.mapLabels`, and it lives
-under `Proof/`, not `Construction/`.
+`axiom`, no `native_decide`, no `implemented_by`, no `extern`. `Construction/` contains **no**
+`noncomputable` at all, which is what the lint gate checks. The `Proof/` layer carries the baseline's own
+`noncomputable` declarations — 616 occurrences against the revision-16 baseline's 614 — and the entry's
+own addition is `Simulator.mapPublic` (`Proof/PackedAdapter.lean`), mirroring the baseline's
+`noncomputable Simulator.mapLabels`.
 
 Every step was reviewed by an independent lane that was told to distrust the reports it was handed,
 and several of those reviews overturned claims made during the work — including two of the author's
@@ -200,8 +210,8 @@ obligation; the third lever, the query pruning, was added after the entry was **
 revision 16** (`argomac-lean@c564e51f`, whose 9,806,076 bytes, 1,759,967 and 1,055,879 queries are
 the current reference). Revision 16 scores a bounded query program for the garbler and the
 evaluator, and the entry's programs enumerate only the twelve adaptor kinds each row reads — X
-omits `x7`, and the Y row dropped `y8` and `y10` — where the baseline enumerates all fifteen. The
-rebase restored the whole machine
+omits `x7`, and the Y row dropped `y8` and `y10` while gaining `y6` — where the baseline enumerates all
+fifteen. The rebase restored the whole machine
 layer and, along the way, corrected 33 statements in that tree that were false under the new
 construction — including two that were provably false rather than stale. The full cost
 model — the mask-dimension law, the spill-routing rule, the eleven closed doors, and the
