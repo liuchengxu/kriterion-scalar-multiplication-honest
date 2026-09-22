@@ -180,14 +180,15 @@ Checked locally with the platform's own `verifier.mjs` — the same five gates i
 {"checks": {"layout":"pass","build":"pass","obligation":"pass",
             "axioms":{"result":"pass","list":["propext","Classical.choice","Quot.sound"]},
             "lint":"pass"},
- "metrics": {"ciphertext_bytes": 8887896},
+ "metrics": {"ciphertext_bytes": 8887896, "garble_queries": 1394207, "evaluate_queries": 836423},
  "diagnostic": null}
 ```
 
-It is repeatable — the same JSON twice, in **18m44.6s** each time, against the platform's 55-minute
-limit (and less than the ~23 min the previously accepted run took there). The build inside the run is
+Verified from scratch on the rebuilt tree: **16m58.5s**, against the platform's 55-minute limit (and less
+than the ~23 min the previously accepted run took there). The build inside the run is
 `lake build Kriterion Construction Proof Submission` under the verifier's own generated lakefile, from
-scratch: 4,497/4,497 jobs including `Proof`.
+scratch, with `Proof` included. Earlier revisions of this entry measured 18m44.6s, when the tree still
+carried 100 orphaned modules the submission does not use.
 
 `#print axioms Submission.solution` → `{propext, Classical.choice, Quot.sound}`. No `sorry`, no
 `axiom`, no `native_decide`, no `implemented_by`, no `extern`. `Construction/` contains **no**
